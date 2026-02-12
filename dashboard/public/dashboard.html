@@ -1,0 +1,2058 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Dashboard - RequestTap Router</title>
+  <link rel="icon" href="/favicon.ico" type="image/x-icon" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+  <link rel="manifest" href="/site.webmanifest" />
+  <style>
+    :root {
+      --bg: #0d1117; --surface: #161b22; --border: #30363d;
+      --text: #e6edf3; --muted: #8b949e; --accent: #58a6ff;
+      --green: #3fb950; --red: #f85149; --orange: #d29922;
+      --purple: #bc8cff; --radius: 8px;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      background: var(--bg); color: var(--text); line-height: 1.5;
+      height: 100vh; display: flex; flex-direction: column;
+    }
+
+    /* Nav */
+    nav {
+      display: flex; align-items: center; gap: 16px;
+      padding: 16px 24px; border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    nav img { height: 48px; display: block; }
+    nav a { color: var(--muted); text-decoration: none; font-size: 18px; cursor: pointer; }
+    nav a:hover { color: var(--text); }
+    nav a.active { color: #2acc91; font-weight: 600; }
+    nav .sep { color: var(--border); font-size: 20px; }
+    .admin-label {
+      font-size: 13px; font-weight: 700; letter-spacing: 1.5px;
+      padding: 3px 10px; border-radius: 4px;
+      background: #58a6ff22; color: var(--accent); border: 1px solid #58a6ff44;
+    }
+    nav .spacer { flex: 1; }
+    .network-label {
+      font-size: 11px; font-weight: 700; letter-spacing: 1px;
+      padding: 3px 8px; border-radius: 4px; margin-right: 4px;
+    }
+    .network-label.testnet { background: transparent; color: var(--orange); border: 1px solid var(--orange); }
+    .network-label.testnet::before { content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--orange); margin-right: 5px; vertical-align: -1px; }
+    .network-label.mainnet { background: transparent; color: var(--green); border: 1px solid var(--orange); }
+    .network-label.mainnet::before { content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--green); margin-right: 5px; vertical-align: -1px; }
+    .network-label.connected { background: transparent; color: var(--green); border: 1px solid var(--green); }
+    .network-label.connected::before { content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--green); margin-right: 5px; vertical-align: -1px; }
+
+    /* Settings */
+    .settings-wrapper { position: relative; }
+    .settings-btn {
+      display: flex; align-items: center; gap: 8px;
+      background: var(--surface); border: 1px solid var(--border);
+      padding: 7px 14px; border-radius: 6px; cursor: pointer;
+      font-size: 15px; color: #2acc91; transition: border-color .2s, color .2s;
+    }
+    .settings-btn:hover { border-color: #2acc91; color: #2acc91; }
+    .settings-btn .cog { width: 18px; height: 18px; transition: transform .3s; }
+    .settings-btn:hover .cog { transform: rotate(45deg); }
+    .settings-dropdown {
+      display: none; position: absolute; right: 0; top: calc(100% + 8px);
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); width: 600px; z-index: 100;
+      box-shadow: 0 8px 24px rgba(0,0,0,.4); max-height: 80vh; overflow-y: auto;
+    }
+    .settings-dropdown.open { display: block; }
+    .settings-dropdown-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 20px; border-bottom: 1px solid var(--border);
+      font-size: 15px; font-weight: 600;
+    }
+    .settings-dropdown-body { padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+    .settings-section-label {
+      font-size: 12px; font-weight: 700; color: var(--accent); text-transform: uppercase;
+      letter-spacing: 1px; padding-top: 14px; margin-top: 4px; border-top: 1px solid var(--border);
+    }
+    .field-group label {
+      display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px;
+      text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;
+    }
+    .field-group input, .field-group select {
+      width: 100%; background: var(--bg); border: 1px solid var(--border);
+      border-radius: 6px; padding: 8px 10px; color: var(--text);
+      font-family: 'SF Mono', 'Cascadia Code', Consolas, monospace; font-size: 14px;
+    }
+    .field-group input:focus, .field-group select:focus { outline: none; border-color: var(--accent); }
+    .test-btn {
+      background: #238636; color: #fff; border: 1px solid #2ea04366;
+      padding: 7px 16px; border-radius: 6px; font-size: 14px; font-weight: 500;
+      cursor: pointer; transition: background .15s; width: 100%;
+    }
+    .test-btn:hover { background: #2ea043; }
+    .test-result { font-size: 14px; margin-top: 4px; }
+
+    /* Layout */
+    .layout { display: flex; flex: 1; overflow: hidden; }
+    .panel-left {
+      width: 400px; min-width: 400px;
+      border-right: 1px solid var(--border);
+      overflow-y: auto; padding: 16px;
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    .panel-right { flex: 1; overflow-y: auto; padding: 20px; }
+
+    /* Connection box */
+    .conn-box {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); overflow: hidden;
+    }
+    .conn-header {
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 14px; border-bottom: 1px solid var(--border);
+      font-size: 14px; font-weight: 600; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .conn-dot { width: 8px; height: 8px; border-radius: 50%; }
+    .conn-dot.online { background: var(--green); }
+    .conn-dot.offline { background: var(--red); }
+    .conn-dot.loading { background: var(--orange); }
+    .conn-body { padding: 12px 14px; }
+    .conn-row { display: flex; gap: 8px; font-size: 14px; margin-bottom: 8px; }
+    .conn-row:last-child { margin-bottom: 0; }
+    .conn-label { color: var(--muted); min-width: 80px; flex-shrink: 0; }
+    .conn-value {
+      color: var(--text); word-break: break-all;
+      font-family: 'SF Mono', 'Cascadia Code', Consolas, monospace; font-size: 13px;
+    }
+
+    /* Stats grid */
+    .stats-grid {
+      display: grid; grid-template-columns: 1fr; gap: 10px;
+    }
+    .stat-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 14px;
+    }
+    .stat-label {
+      font-size: 12px; font-weight: 600; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;
+    }
+    .stat-value {
+      font-size: 26px; font-weight: 700;
+      font-family: 'SF Mono', 'Cascadia Code', Consolas, monospace;
+    }
+    .stat-sub { font-size: 13px; color: var(--muted); margin-top: 2px; }
+
+    /* Quick Actions */
+    .quick-actions {
+      display: flex; gap: 8px;
+    }
+    .quick-actions .btn { flex: 1; text-align: center; }
+
+    /* Tables */
+    table { width: 100%; border-collapse: collapse; }
+    th {
+      text-align: left; font-size: 12px; font-weight: 600; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.5px;
+      padding: 8px 10px; border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; background: var(--bg);
+    }
+    td {
+      padding: 8px 10px; border-bottom: 1px solid var(--border);
+      font-size: 14px; vertical-align: top;
+    }
+    tr:hover td { background: var(--surface); }
+    .mono {
+      font-family: 'SF Mono', 'Cascadia Code', Consolas, monospace; font-size: 13px;
+    }
+    .method-tag {
+      font-size: 11px; font-weight: 700; padding: 1px 5px; border-radius: 3px;
+      font-family: monospace; display: inline-block;
+    }
+    .method-GET { background: #3fb95022; color: var(--green); }
+    .method-POST { background: #58a6ff22; color: var(--accent); }
+    .method-PUT { background: #d2992222; color: var(--orange); }
+    .method-DELETE { background: #f8514922; color: var(--red); }
+    .method-PATCH { background: #bc8cff22; color: var(--purple); }
+    .method-HEAD { background: #8b949e22; color: var(--muted); }
+    .method-OPTIONS { background: #8b949e22; color: var(--muted); }
+    .outcome-SUCCESS { color: var(--green); }
+    .outcome-ERROR { color: var(--red); }
+    .outcome-DENIED { color: var(--orange); }
+
+    /* Buttons */
+    .btn {
+      background: var(--surface); border: 1px solid var(--border); color: var(--text);
+      padding: 6px 14px; border-radius: 6px; font-size: 14px; cursor: pointer;
+      transition: border-color .2s;
+    }
+    .btn:hover { border-color: var(--muted); }
+    .btn-green { background: #238636; color: #fff; border-color: #2ea04366; }
+    .btn-green:hover { background: #2ea043; }
+    .btn-accent { background: #1f6feb; color: #fff; border-color: #388bfd66; }
+    .btn-accent:hover { background: #388bfd; }
+    .btn-red { background: #da363222; color: var(--red); border-color: #f8514933; }
+    .btn-red:hover { background: #da363244; }
+    .btn-sm { padding: 3px 8px; font-size: 13px; }
+
+    /* Panel header */
+    .panel-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .panel-header h2 { font-size: 18px; font-weight: 600; }
+
+    /* Filter bar */
+    .filter-bar {
+      display: flex; gap: 10px; align-items: center; margin-bottom: 14px; flex-wrap: wrap;
+    }
+    .filter-bar select, .filter-bar input {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 6px; padding: 6px 10px; color: var(--text); font-size: 14px;
+    }
+    .filter-bar select:focus, .filter-bar input:focus { outline: none; border-color: var(--accent); }
+
+    /* Form */
+    .form-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 16px; margin-bottom: 16px;
+    }
+    .form-grid .full { grid-column: 1 / -1; }
+    .form-grid label {
+      display: block; font-size: 12px; font-weight: 600; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px;
+    }
+    .form-grid input, .form-grid select, .form-grid textarea {
+      width: 100%; background: var(--bg); border: 1px solid var(--border);
+      border-radius: 4px; padding: 6px 8px; color: var(--text); font-size: 14px;
+      font-family: inherit;
+    }
+    .form-grid input:focus, .form-grid select:focus, .form-grid textarea:focus {
+      outline: none; border-color: var(--accent);
+    }
+
+    /* Routes table */
+    .routes-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    .routes-table th {
+      text-align: left; font-size: 12px; font-weight: 600; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.5px;
+      padding: 8px 10px; border-bottom: 1px solid var(--border);
+      background: var(--bg);
+    }
+    .routes-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); font-size: 14px; vertical-align: middle; }
+    .group-header-row { cursor: pointer; }
+    .group-header-row td {
+      background: var(--surface); padding: 10px 14px;
+      font-size: 15px; font-weight: 600;
+    }
+    .group-header-row:hover td { background: #1c2128; }
+    .group-header-row .chevron {
+      display: inline-block; transition: transform .2s;
+      font-size: 12px; color: var(--muted); margin-right: 8px;
+    }
+    .group-header-row .chevron.open { transform: rotate(90deg); }
+    .group-header-row .group-name { margin-right: 10px; }
+    .group-header-row .group-count { font-size: 13px; color: var(--muted); font-weight: 400; }
+    .group-route-row .route-desc { color: var(--muted); font-size: 13px; }
+    .group-route-row:hover td { background: var(--surface); }
+    .group-route-row.hidden { display: none; }
+    .group-route-row.route-restricted td { opacity: 0.5; }
+    .group-route-row.route-restricted .route-actions { opacity: 1; }
+    .route-actions { white-space: nowrap; }
+    .route-actions .btn { margin-right: 6px; }
+    .route-price-cell .price-display {
+      font-family: 'SF Mono', 'Cascadia Code', Consolas, monospace;
+      font-size: 22px; font-weight: 700; color: var(--green);
+    }
+    .route-price-cell .price-unit {
+      font-size: 11px; color: var(--green); font-weight: 400; margin-left: 4px;
+    }
+    .btn-restrict { background: #da363222; color: var(--orange); border-color: #d2992233; }
+    .btn-restrict:hover { background: #da363244; }
+    .routes-section-title {
+      font-size: 14px; font-weight: 600; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.5px;
+      margin-bottom: 8px; padding: 0 2px;
+    }
+    .routes-section-count {
+      font-size: 12px; color: var(--accent); background: #58a6ff22;
+      padding: 1px 6px; border-radius: 3px; margin-left: 6px;
+    }
+    .restricted-label {
+      font-size: 11px; font-weight: 700; color: var(--red);
+      background: #f8514922; padding: 2px 8px; border-radius: 3px;
+      letter-spacing: 0.5px;
+    }
+
+    /* Detail expansion */
+    .detail-row { display: none; }
+    .detail-row.open { display: table-row; }
+    .detail-row td {
+      background: var(--surface); padding: 12px 14px;
+    }
+    .detail-pre {
+      font-family: 'SF Mono', 'Cascadia Code', Consolas, monospace;
+      font-size: 13px; line-height: 1.6; white-space: pre-wrap; word-break: break-all;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 6px; padding: 12px; max-height: 300px; overflow-y: auto;
+    }
+
+    /* Modal overlay */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,.6); z-index: 200;
+      align-items: center; justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); width: 700px; max-height: 80vh;
+      overflow-y: auto; box-shadow: 0 12px 40px rgba(0,0,0,.5);
+    }
+    .modal-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 20px; border-bottom: 1px solid var(--border);
+      font-size: 17px; font-weight: 600;
+    }
+    .modal-close {
+      background: none; border: none; color: var(--muted); font-size: 22px;
+      cursor: pointer; padding: 4px 8px;
+    }
+    .modal-close:hover { color: var(--text); }
+    .modal-body { padding: 20px; }
+    .modal-body textarea {
+      width: 100%; background: var(--bg); border: 1px solid var(--border);
+      border-radius: 6px; padding: 10px; color: var(--text);
+      font-family: 'SF Mono', 'Cascadia Code', Consolas, monospace; font-size: 14px;
+      min-height: 200px; resize: vertical;
+    }
+    .modal-body textarea:focus { outline: none; border-color: var(--accent); }
+    .modal-body .field-group { margin-bottom: 12px; }
+    .modal-footer {
+      display: flex; gap: 8px; justify-content: flex-end;
+      padding: 16px 20px; border-top: 1px solid var(--border);
+    }
+
+
+    /* Inline editable */
+    .editable-price {
+      background: transparent; border: 1px solid transparent;
+      color: var(--green); padding: 2px 6px; border-radius: 3px;
+      font-family: 'SF Mono', 'Cascadia Code', Consolas, monospace; font-size: 22px;
+      font-weight: 700; width: 110px; cursor: pointer;
+    }
+    .editable-price:hover { border-color: var(--border); }
+    .editable-price:focus { border-color: var(--accent); background: var(--bg); outline: none; cursor: text; }
+
+    /* Preview table */
+    .preview-table { margin-top: 12px; }
+    .preview-table td { font-size: 13px; padding: 4px 8px; }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    .empty-state {
+      display: flex; align-items: center; justify-content: center;
+      color: var(--muted); font-size: 16px; padding: 60px 20px;
+    }
+
+    a.tx-link { color: var(--accent); text-decoration: none; }
+    a.tx-link:hover { text-decoration: underline; }
+
+    /* Sidebar footer */
+    .sidebar-footer {
+      margin-top: auto; padding: 12px 6px 6px;
+      border-top: 1px solid var(--border); font-size: 11px; color: var(--muted);
+    }
+    .sidebar-footer .footer-title { font-weight: 600; font-size: 12px; margin-bottom: 8px; }
+    .sidebar-footer .footer-links {
+      display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+    }
+    .sidebar-footer .footer-links a {
+      color: var(--muted); text-decoration: none; display: inline-flex; align-items: center; gap: 4px;
+      font-size: 11px; transition: color .15s;
+    }
+    .sidebar-footer .footer-links a:hover { color: var(--text); }
+    .sidebar-footer .footer-links svg { width: 14px; height: 14px; }
+
+    .auto-refresh-toggle {
+      display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--muted);
+    }
+    .auto-refresh-toggle input { accent-color: var(--accent); }
+
+    /* Debug Tab */
+    .debug-section { margin-bottom: 24px; }
+    .debug-section-title {
+      font-size: 14px; font-weight: 600; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px;
+    }
+    .debug-cards { display: flex; flex-direction: column; gap: 8px; }
+    .debug-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 12px 16px;
+      border-left: 3px solid var(--border); transition: border-color .2s;
+    }
+    .debug-card.pass { border-left-color: var(--green); }
+    .debug-card.fail { border-left-color: var(--red); }
+    .debug-card.skip { border-left-color: var(--orange); }
+    .debug-card.running { border-left-color: var(--accent); }
+    .debug-card-header {
+      display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;
+    }
+    .debug-card-title { font-size: 15px; font-weight: 600; }
+    .debug-card-desc {
+      font-size: 12px; color: var(--muted); margin-bottom: 6px;
+      font-family: 'SF Mono', 'Cascadia Code', Consolas, monospace;
+    }
+    .debug-result { font-size: 13px; }
+    .debug-status-badge {
+      display: inline-block; font-size: 11px; font-weight: 700;
+      padding: 2px 8px; border-radius: 3px; letter-spacing: 0.5px; margin-bottom: 6px;
+    }
+    .debug-status-badge.pass { background: #3fb95022; color: var(--green); }
+    .debug-status-badge.fail { background: #f8514922; color: var(--red); }
+    .debug-status-badge.skip { background: #d2992222; color: var(--orange); }
+    .debug-status-badge.running { background: #58a6ff22; color: var(--accent); }
+    .debug-body {
+      font-family: 'SF Mono', 'Cascadia Code', Consolas, monospace;
+      font-size: 12px; line-height: 1.5; white-space: pre-wrap; word-break: break-all;
+      background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+      padding: 8px; max-height: 200px; overflow-y: auto; margin: 0;
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a href="/dashboard"><img src="/logo.png" alt="RequestTap" /></a>
+  <span class="admin-label">ROUTER ADMIN</span>
+  <span class="sep" id="sep-routes">/</span>
+  <a onclick="switchTab('routes')" id="nav-routes" class="active">ROUTES</a>
+  <span class="sep" id="sep-requests">/</span>
+  <a onclick="switchTab('requests')" id="nav-requests">REQUESTS</a>
+  <span class="sep" id="sep-debug">/</span>
+  <a onclick="switchTab('debug')" id="nav-debug">DEBUG</a>
+  <span class="sep">/</span>
+  <a href="/docs" id="nav-docs">DOCS</a>
+  <span class="spacer"></span>
+  <span class="network-label" id="label-base">BASE TESTNET</span>
+  <span class="network-label" id="label-skale">SKALE TESTNET</span>
+  <div class="settings-wrapper">
+    <button class="settings-btn" onclick="toggleSettings()">
+      <svg class="cog" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+      </svg>
+      SETTINGS
+    </button>
+    <div class="settings-dropdown" id="settings-dropdown">
+      <div class="settings-dropdown-header">
+        <span>SETTINGS</span>
+      </div>
+      <div class="settings-dropdown-body">
+        <div class="settings-section-label" style="border-top:none;padding-top:0">Existing API Provider</div>
+        <div class="field-group">
+          <label>API Key</label>
+          <input type="password" id="input-api-key" placeholder="sk-..." value="YOUR_API_KEY" />
+        </div>
+        <button class="test-btn" style="background:#1f6feb;border-color:#388bfd66" onclick="openImportModal();toggleSettings()">Import API Routes</button>
+        <div class="settings-section-label">Payment Settings</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:8px">This is the wallet that pays for the BASE L2 fees and also receives the payments</div>
+        <div class="field-group">
+          <label>Wallet Address (Base L2)</label>
+          <input type="text" id="input-wallet-address" placeholder="0x..." />
+        </div>
+        <div class="field-group">
+          <label>Base Network</label>
+          <select id="input-base-network">
+            <option value="base-sepolia">base-sepolia (Testnet)</option>
+            <option value="base">base (Mainnet)</option>
+          </select>
+        </div>
+        <button class="test-btn" onclick="testWallet()">Test Wallet Connection</button>
+        <div class="test-result" id="test-wallet-result"></div>
+        <div class="settings-section-label">SKALE Settings</div>
+        <div class="field-group">
+          <label>SKALE Network</label>
+          <select id="input-skale-network">
+            <option value="calypso-testnet">Calypso Hub (Testnet)</option>
+            <option value="staging-v3">Chaos (Testnet)</option>
+            <option value="mainnet">mainnet</option>
+          </select>
+        </div>
+        <div class="field-group">
+          <label>SKALE RPC URL</label>
+          <input type="text" id="input-skale-rpc" placeholder="https://..." />
+        </div>
+        <div class="field-group">
+          <label>BITE Contract Address</label>
+          <input type="text" id="input-skale-contract" placeholder="0x..." />
+        </div>
+        <button class="test-btn" onclick="testSkale()">Test SKALE Connection</button>
+        <div class="test-result" id="test-skale-result"></div>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<div class="layout">
+  <!-- Left Panel -->
+  <div class="panel-left">
+    <div class="conn-box">
+      <div class="conn-header">
+        <span class="conn-dot loading" id="conn-dot"></span>
+        <span id="conn-label">Checking gateway...</span>
+      </div>
+      <div class="conn-body">
+        <div class="conn-row">
+          <span class="conn-label">Status</span>
+          <span class="conn-value" id="conn-status">Connecting...</span>
+        </div>
+        <div class="conn-row">
+          <span class="conn-label">Uptime</span>
+          <span class="conn-value" id="conn-uptime">-</span>
+        </div>
+        <div class="conn-row">
+          <span class="conn-label">Routes</span>
+          <span class="conn-value" id="conn-routes">-</span>
+        </div>
+        <div class="conn-row">
+          <span class="conn-label">Requests</span>
+          <span class="conn-value" id="conn-receipts">-</span>
+        </div>
+        <div class="conn-row" id="conn-endpoint-row" style="display:none">
+          <span class="conn-label">Endpoint</span>
+          <span class="conn-value"><a class="tx-link" id="conn-endpoint" href="#" target="_blank">-</a></span>
+        </div>
+        <div class="conn-row" id="conn-docs-row" style="display:none">
+          <span class="conn-label">API Docs</span>
+          <span class="conn-value"><a class="tx-link" id="conn-docs" href="#" target="_blank">-</a></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Revenue</div>
+        <div class="stat-value"><span id="stat-usdc" style="color:var(--green)">-</span> <span style="color:var(--green);font-size:14px;font-weight:400">USDC</span></div>
+      </div>
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="footer-title">RequestTap Router v1.0</div>
+      <div class="footer-links">
+        <a href="https://x.com/RequestTap" target="_blank" title="X.com">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+        </a>
+        <a href="https://github.com/RequestTap/RequestTap-Router" target="_blank" title="GitHub">
+          <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+          GitHub
+        </a>
+        <a href="https://RequestTap.ai" target="_blank" title="Website">RequestTap.ai</a>
+        <a href="https://dorahacks.io/hackathon/x402/" target="_blank" title="x402 Hackathon">x402 Hackathon</a>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Right Panel -->
+  <div class="panel-right">
+    <!-- Import CTA shown when no routes -->
+    <div id="routes-import-cta" style="display:none;text-align:center;padding:80px 20px">
+      <div style="color:var(--muted);font-size:18px;margin-bottom:20px">No routes configured</div>
+      <button class="btn btn-accent" style="font-size:16px;padding:12px 28px" onclick="openImportModal()">Import API from OpenAPI Spec</button>
+      <div style="margin-top:16px">
+        <button class="btn btn-green" style="font-size:16px;padding:12px 28px" onclick="loadDemoSettings()">Load Demo Settings</button>
+      </div>
+    </div>
+
+    <!-- Routes Tab -->
+    <div id="tab-routes">
+      <div class="panel-header">
+        <h2>Routes</h2>
+        <div style="display:flex;gap:8px;align-items:center">
+          <div id="global-price-form" style="display:none;display:none;align-items:center;gap:6px">
+            <input type="text" id="input-global-price" placeholder="0.01"
+              style="width:80px;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:5px 8px;color:var(--text);font-family:'SF Mono','Cascadia Code',Consolas,monospace;font-size:13px"
+              onkeydown="if(event.key==='Enter')applyGlobalPrice();if(event.key==='Escape')hideGlobalPrice()" />
+            <span style="font-size:11px;color:var(--green)">USDC</span>
+            <button class="btn btn-green btn-sm" onclick="applyGlobalPrice()">Apply</button>
+            <button class="btn btn-sm" onclick="hideGlobalPrice()">Cancel</button>
+          </div>
+          <button class="btn" id="btn-global-price" onclick="showGlobalPrice()">Set Global Price</button>
+          <button class="btn" onclick="generateDocs()">Generate API Docs</button>
+          <button class="btn" onclick="loadRoutes()">Refresh</button>
+          <button class="btn btn-red" onclick="removeAllRoutes()">Remove All</button>
+        </div>
+      </div>
+
+      <!-- Grouped Routes Display -->
+      <div id="routes-grouped"></div>
+    </div>
+
+    <!-- Requests Tab -->
+    <div id="tab-requests" style="display:none">
+      <div class="panel-header">
+        <h2>Requests</h2>
+        <div style="display:flex;gap:8px;align-items:center">
+          <label class="auto-refresh-toggle">
+            <input type="checkbox" id="requests-auto-refresh" checked />
+            Auto-refresh
+          </label>
+          <button class="btn" onclick="loadRequests()">Refresh</button>
+          <button class="btn" onclick="exportReceipts()">Export JSON</button>
+        </div>
+      </div>
+      <div class="filter-bar">
+        <select id="filter-tool-id"><option value="">All Tools</option></select>
+        <select id="filter-outcome">
+          <option value="">All Outcomes</option>
+          <option value="SUCCESS">SUCCESS</option>
+          <option value="ERROR">ERROR</option>
+          <option value="DENIED">DENIED</option>
+        </select>
+        <input type="number" id="filter-limit" value="50" min="1" max="500" style="width:80px" />
+        <button class="btn" onclick="loadRequests()">Apply</button>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Time</th><th>Tool</th><th>Method</th><th>Endpoint</th>
+            <th>Outcome</th><th>Latency</th><th>Price</th><th>TX Hash</th><th>Receipt</th>
+          </tr>
+        </thead>
+        <tbody id="requests-body"></tbody>
+      </table>
+      <div class="empty-state" id="requests-empty">No requests yet</div>
+    </div>
+
+    <!-- Debug Tab -->
+    <div id="tab-debug" style="display:none">
+      <div class="panel-header">
+        <h2>Debug Tests</h2>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span id="debug-summary" class="mono" style="font-size:13px"></span>
+          <button class="btn btn-green" onclick="runAllTests()">Run All Tests</button>
+          <button class="btn" onclick="clearAllTests()">Clear Results</button>
+        </div>
+      </div>
+
+      <div class="debug-section">
+        <h3 class="debug-section-title">Gateway Core</h3>
+        <div class="debug-cards">
+          <div class="debug-card" id="debug-health">
+            <div class="debug-card-header"><span class="debug-card-title">Health Check</span><button class="btn btn-sm" onclick="testHealthCheck()">Run</button></div>
+            <div class="debug-card-desc">GET /health &mdash; 200 + status:"ok"</div>
+            <div class="debug-result"></div>
+          </div>
+          <div class="debug-card" id="debug-route-match">
+            <div class="debug-card-header"><span class="debug-card-title">Route Match</span><button class="btn btn-sm" onclick="testRouteMatch()">Run</button></div>
+            <div class="debug-card-desc">Hit first enabled route with API key &mdash; expect not 404</div>
+            <div class="debug-result"></div>
+          </div>
+          <div class="debug-card" id="debug-route-404">
+            <div class="debug-card-header"><span class="debug-card-title">Route Not Found</span><button class="btn btn-sm" onclick="testRouteNotFound()">Run</button></div>
+            <div class="debug-card-desc">GET /api/v1/__nonexistent__ &mdash; 404 ROUTE_NOT_FOUND</div>
+            <div class="debug-result"></div>
+          </div>
+          <div class="debug-card" id="debug-route-restricted">
+            <div class="debug-card-header"><span class="debug-card-title">Restricted Route</span><button class="btn btn-sm" onclick="testRestrictedRoute()">Run</button></div>
+            <div class="debug-card-desc">Hit a disabled route &mdash; shows response (skip if none)</div>
+            <div class="debug-result"></div>
+          </div>
+          <div class="debug-card" id="debug-auth-401">
+            <div class="debug-card-header"><span class="debug-card-title">API Key Auth (401)</span><button class="btn btn-sm" onclick="testAuth401()">Run</button></div>
+            <div class="debug-card-desc">Hit route WITHOUT API key &mdash; 401 UNAUTHORIZED</div>
+            <div class="debug-result"></div>
+          </div>
+          <div class="debug-card" id="debug-auth-valid">
+            <div class="debug-card-header"><span class="debug-card-title">API Key Valid</span><button class="btn btn-sm" onclick="testAuthValid()">Run</button></div>
+            <div class="debug-card-desc">Hit route WITH correct API key &mdash; not 401</div>
+            <div class="debug-result"></div>
+          </div>
+          <div class="debug-card" id="debug-rate-limit">
+            <div class="debug-card-header"><span class="debug-card-title">Rate Limiting</span><button class="btn btn-sm" onclick="testRateLimit()">Run</button></div>
+            <div class="debug-card-desc">105 rapid GET /health &mdash; expect at least one 429 (excluded from Run All)</div>
+            <div class="debug-result"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="debug-section">
+        <h3 class="debug-section-title">Idempotency</h3>
+        <div class="debug-cards">
+          <div class="debug-card" id="debug-idempotency">
+            <div class="debug-card-header"><span class="debug-card-title">Replay Detection</span><button class="btn btn-sm" onclick="testIdempotency()">Run</button></div>
+            <div class="debug-card-desc">Same request 2x with X-Idempotency-Key &mdash; 2nd returns 409</div>
+            <div class="debug-result"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="debug-section">
+        <h3 class="debug-section-title">Payment</h3>
+        <div class="debug-cards">
+          <div class="debug-card" id="debug-payment-402">
+            <div class="debug-card-header"><span class="debug-card-title">Payment Required</span><button class="btn btn-sm" onclick="testPaymentRequired()">Run</button></div>
+            <div class="debug-card-desc">Hit priced route without payment &mdash; 402</div>
+            <div class="debug-result"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="debug-section">
+        <h3 class="debug-section-title">AP2 Mandate</h3>
+        <div class="debug-cards">
+          <div class="debug-card" id="debug-mandate-skipped">
+            <div class="debug-card-header"><span class="debug-card-title">Mandate Accepted (No Mandate)</span><button class="btn btn-sm" onclick="testMandateSkipped()">Run</button></div>
+            <div class="debug-card-desc">Request without X-Mandate header &mdash; mandate step skipped, not blocked</div>
+            <div class="debug-result"></div>
+          </div>
+          <div class="debug-card" id="debug-mandate-rejected">
+            <div class="debug-card-header"><span class="debug-card-title">Mandate Rejected (Invalid)</span><button class="btn btn-sm" onclick="testMandateRejected()">Run</button></div>
+            <div class="debug-card-desc">Request with malformed X-Mandate &mdash; 400 Bad Request</div>
+            <div class="debug-result"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="debug-section">
+        <h3 class="debug-section-title">Agent Blacklist</h3>
+        <div class="debug-cards">
+          <div class="debug-card" id="debug-blacklist-api">
+            <div class="debug-card-header"><span class="debug-card-title">Blacklist API</span><button class="btn btn-sm" onclick="testBlacklistApi()">Run</button></div>
+            <div class="debug-card-desc">GET /admin/blacklist &mdash; returns blacklist array</div>
+            <div class="debug-result"></div>
+          </div>
+          <div class="debug-card" id="debug-agent-allowed">
+            <div class="debug-card-header"><span class="debug-card-title">Agent Not Blacklisted</span><button class="btn btn-sm" onclick="testAgentAllowed()">Run</button></div>
+            <div class="debug-card-desc">Request with X-Agent-Address not on blacklist &mdash; not 403 AGENT_BLOCKED</div>
+            <div class="debug-result"></div>
+          </div>
+          <div class="debug-card" id="debug-agent-blocked">
+            <div class="debug-card-header"><span class="debug-card-title">Agent Blocked</span><button class="btn btn-sm" onclick="testAgentBlocked()">Run</button></div>
+            <div class="debug-card-desc">Add agent to blacklist, request &mdash; 403 AGENT_BLOCKED, then remove</div>
+            <div class="debug-result"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="debug-section">
+        <h3 class="debug-section-title">Receipts</h3>
+        <div class="debug-cards">
+          <div class="debug-card" id="debug-receipts-stats">
+            <div class="debug-card-header"><span class="debug-card-title">Stats</span><button class="btn btn-sm" onclick="testReceiptsStats()">Run</button></div>
+            <div class="debug-card-desc">GET /admin/receipts/stats &mdash; has total_requests</div>
+            <div class="debug-result"></div>
+          </div>
+          <div class="debug-card" id="debug-receipts-list">
+            <div class="debug-card-header"><span class="debug-card-title">List</span><button class="btn btn-sm" onclick="testReceiptsList()">Run</button></div>
+            <div class="debug-card-desc">GET /admin/receipts?limit=5 &mdash; has receipts[]</div>
+            <div class="debug-result"></div>
+          </div>
+          <div class="debug-card" id="debug-receipts-filter">
+            <div class="debug-card-header"><span class="debug-card-title">Filter</span><button class="btn btn-sm" onclick="testReceiptsFilter()">Run</button></div>
+            <div class="debug-card-desc">GET /admin/receipts?outcome=DENIED &mdash; all returned are DENIED</div>
+            <div class="debug-result"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="debug-section">
+        <h3 class="debug-section-title">Admin API</h3>
+        <div class="debug-cards">
+          <div class="debug-card" id="debug-admin-config">
+            <div class="debug-card-header"><span class="debug-card-title">Gateway Config</span><button class="btn btn-sm" onclick="testAdminConfig()">Run</button></div>
+            <div class="debug-card-desc">GET /admin/config &mdash; has port, baseNetwork</div>
+            <div class="debug-result"></div>
+          </div>
+          <div class="debug-card" id="debug-admin-dashboard">
+            <div class="debug-card-header"><span class="debug-card-title">Dashboard Config</span><button class="btn btn-sm" onclick="testDashboardConfigTest()">Run</button></div>
+            <div class="debug-card-desc">GET /admin/dashboard-config &mdash; has expected fields</div>
+            <div class="debug-result"></div>
+          </div>
+          <div class="debug-card" id="debug-admin-routes">
+            <div class="debug-card-header"><span class="debug-card-title">Routes List</span><button class="btn btn-sm" onclick="testAdminRoutes()">Run</button></div>
+            <div class="debug-card-desc">GET /admin/routes &mdash; has routes[]</div>
+            <div class="debug-result"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="debug-section">
+        <h3 class="debug-section-title">Docs</h3>
+        <div class="debug-cards">
+          <div class="debug-card" id="debug-openapi">
+            <div class="debug-card-header"><span class="debug-card-title">OpenAPI Spec</span><button class="btn btn-sm" onclick="testOpenApiSpec()">Run</button></div>
+            <div class="debug-card-desc">GET /admin/docs/openapi &mdash; has openapi:"3.0.x" + paths</div>
+            <div class="debug-result"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="debug-section">
+        <h3 class="debug-section-title">SKALE</h3>
+        <div class="debug-cards">
+          <div class="debug-card" id="debug-skale-rpc">
+            <div class="debug-card-header"><span class="debug-card-title">RPC Connection</span><button class="btn btn-sm" onclick="testSkaleRpc()">Run</button></div>
+            <div class="debug-card-desc">eth_chainId via /rpc-proxy &mdash; returns chain ID</div>
+            <div class="debug-result"></div>
+          </div>
+          <div class="debug-card" id="debug-skale-block">
+            <div class="debug-card-header"><span class="debug-card-title">Latest Block</span><button class="btn btn-sm" onclick="testSkaleBlock()">Run</button></div>
+            <div class="debug-card-desc">eth_blockNumber via /rpc-proxy &mdash; returns block number</div>
+            <div class="debug-result"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Import API Modal -->
+<div class="modal-overlay" id="import-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span>Import API from OpenAPI Spec</span>
+      <button class="modal-close" onclick="closeImportModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="field-group">
+        <label>API Config URL</label>
+        <div style="display:flex;gap:8px">
+          <input type="text" id="import-spec-url" placeholder="https://api.example.com/openapi.json"
+            style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-family:'SF Mono','Cascadia Code',Consolas,monospace;font-size:14px"
+            onkeydown="if(event.key==='Enter')fetchOpenApiFromUrl()" />
+          <button class="btn btn-accent" onclick="fetchOpenApiFromUrl()">Fetch</button>
+        </div>
+        <div id="fetch-spec-status" style="font-size:12px;margin-top:4px"></div>
+      </div>
+      <div class="field-group">
+        <label>OpenAPI Spec (JSON or YAML)</label>
+        <textarea id="import-spec" placeholder='Paste your OpenAPI 3.0 spec here (JSON or YAML)...'></textarea>
+      </div>
+      <div class="field-group">
+        <label>Or upload a file</label>
+        <input type="file" id="import-file" accept=".json,.yaml,.yml" onchange="loadImportFile(event)" style="font-size:12px" />
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px">
+        <div class="field-group">
+          <label>Default Price (USDC)</label>
+          <input type="text" id="import-price" placeholder="0.01" />
+        </div>
+        <div class="field-group">
+          <label>Backend URL</label>
+          <input type="text" id="import-backend-url" placeholder="https://api.example.com" />
+        </div>
+      </div>
+      <div style="margin-top:12px">
+        <a href="#" onclick="event.preventDefault();document.getElementById('import-advanced').style.display=document.getElementById('import-advanced').style.display==='none'?'':'none';this.textContent=document.getElementById('import-advanced').style.display==='none'?'Show Advanced':'Hide Advanced'" style="font-size:13px;color:var(--muted);text-decoration:none">Show Advanced</a>
+        <div id="import-advanced" style="display:none;margin-top:10px">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div class="field-group">
+              <label>Provider ID</label>
+              <input type="text" id="import-provider-id" placeholder="my-provider" />
+            </div>
+            <div class="field-group">
+              <label>Auth Header</label>
+              <input type="text" id="import-auth-header" placeholder="Authorization" />
+            </div>
+            <div class="field-group" style="grid-column:1/-1">
+              <label>Auth Value</label>
+              <input type="password" id="import-auth-value" placeholder="sk-..." />
+            </div>
+          </div>
+        </div>
+      </div>
+      <div id="import-preview" style="margin-top:12px"></div>
+      <div id="import-status" style="font-size:12px;margin-top:8px"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="previewImport()">Preview</button>
+      <button class="btn btn-green" onclick="executeImport()">Import</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── State ────────────────────────────────────────────────────────────
+let adminKey = localStorage.getItem('rt-admin-key') || '';
+let gatewayUrl = localStorage.getItem('rt-gateway-url') || '';
+let activeTab = 'routes';
+let allReceipts = [];
+let pollTimer = null;
+let dashboardConfig = null;
+let routeGroups = [];
+
+// ── Init ─────────────────────────────────────────────────────────────
+(function init() {
+  refreshAll();
+  loadRoutes();
+  startPolling();
+
+  // Provider settings listeners
+  let saveTimer = null;
+  function debouncedSave() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveDashboardConfig, 500);
+  }
+  ['input-wallet-address', 'input-api-key'].forEach(id => {
+    document.getElementById(id).addEventListener('input', debouncedSave);
+  });
+  ['input-skale-rpc', 'input-skale-contract'].forEach(id => {
+    document.getElementById(id).addEventListener('input', () => {
+      localStorage.removeItem('rt-skale-connected');
+      debouncedSave();
+    });
+  });
+  document.getElementById('input-base-network').addEventListener('change', () => {
+    localStorage.removeItem('rt-base-connected');
+    saveDashboardConfig();
+  });
+  document.getElementById('input-skale-network').addEventListener('change', () => {
+    localStorage.removeItem('rt-skale-connected');
+    saveDashboardConfig();
+  });
+
+  // Load dashboard config from gateway
+  loadDashboardConfig();
+})();
+
+
+// ── API helper ───────────────────────────────────────────────────────
+async function api(path, opts = {}) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (adminKey) headers['x-admin-key'] = adminKey;
+  const res = await fetch('/gateway' + path, { ...opts, headers: { ...headers, ...opts.headers } });
+  return res;
+}
+
+// ── Dashboard Config ─────────────────────────────────────────────────
+async function loadDashboardConfig() {
+  try {
+    const r = await api('/admin/dashboard-config');
+    if (!r.ok) return;
+    dashboardConfig = await r.json();
+    routeGroups = dashboardConfig.routeGroups || [];
+    document.getElementById('input-wallet-address').value = dashboardConfig.payToAddress || '';
+    document.getElementById('input-base-network').value = dashboardConfig.baseNetwork || 'base-sepolia';
+    document.getElementById('input-global-price').value = dashboardConfig.globalPriceUsdc || '';
+    document.getElementById('input-skale-network').value = dashboardConfig.skaleNetwork || 'staging-v3';
+    document.getElementById('input-skale-rpc').value = dashboardConfig.skaleRpcUrl || '';
+    document.getElementById('input-skale-contract').value = dashboardConfig.skaleBiteContract || '';
+    document.getElementById('input-api-key').value = dashboardConfig.apiKey || '';
+    updateNetworkLabels();
+  } catch {}
+}
+
+async function saveDashboardConfig() {
+  const config = {
+    payToAddress: document.getElementById('input-wallet-address').value.trim(),
+    baseNetwork: document.getElementById('input-base-network').value,
+    globalPriceUsdc: document.getElementById('input-global-price').value.trim() || null,
+    skaleNetwork: document.getElementById('input-skale-network').value,
+    skaleRpcUrl: document.getElementById('input-skale-rpc').value.trim(),
+    skaleBiteContract: document.getElementById('input-skale-contract').value.trim(),
+    apiKey: document.getElementById('input-api-key').value.trim(),
+    routeGroups: routeGroups,
+  };
+  try {
+    const r = await api('/admin/dashboard-config', {
+      method: 'PUT',
+      body: JSON.stringify(config),
+    });
+    if (r.ok) {
+      dashboardConfig = (await r.json()).config;
+      updateNetworkLabels();
+    }
+  } catch {}
+}
+
+function updateNetworkLabels() {
+  const baseNet = document.getElementById('input-base-network').value;
+  const skaleNet = document.getElementById('input-skale-network').value;
+  const baseLabel = document.getElementById('label-base');
+  const skaleLabel = document.getElementById('label-skale');
+  const baseIsMainnet = baseNet === 'base';
+  const skaleIsMainnet = skaleNet === 'mainnet';
+  const baseName = baseIsMainnet ? 'BASE MAINNET' : 'BASE TESTNET';
+  const skaleName = skaleIsMainnet ? 'SKALE MAINNET' : 'SKALE TESTNET';
+
+  const baseConnected = localStorage.getItem('rt-base-connected') === baseNet;
+  const skaleConnected = localStorage.getItem('rt-skale-connected') === skaleNet + '|' + document.getElementById('input-skale-rpc').value;
+
+  baseLabel.textContent = baseName + (baseConnected ? ' ✓' : '');
+  baseLabel.className = 'network-label ' + (baseConnected ? 'connected' : (baseIsMainnet ? 'mainnet' : 'testnet'));
+  skaleLabel.textContent = skaleName + (skaleConnected ? ' ✓' : '');
+  skaleLabel.className = 'network-label ' + (skaleConnected ? 'connected' : (skaleIsMainnet ? 'mainnet' : 'testnet'));
+}
+updateNetworkLabels();
+
+// ── Settings ─────────────────────────────────────────────────────────
+function toggleSettings() {
+  document.getElementById('settings-dropdown').classList.toggle('open');
+}
+document.addEventListener('click', (e) => {
+  if (!document.querySelector('.settings-wrapper').contains(e.target)) {
+    document.getElementById('settings-dropdown').classList.remove('open');
+  }
+});
+
+async function testWallet() {
+  const el = document.getElementById('test-wallet-result');
+  const addr = document.getElementById('input-wallet-address').value.trim();
+  const network = document.getElementById('input-base-network').value;
+  if (!addr) {
+    el.textContent = 'Enter a wallet address first';
+    el.style.color = 'var(--red)';
+    return;
+  }
+  if (!/^0x[a-fA-F0-9]{40}$/.test(addr)) {
+    el.textContent = 'Invalid address format (expected 0x + 40 hex chars)';
+    el.style.color = 'var(--red)';
+    return;
+  }
+  el.textContent = 'Checking...';
+  el.style.color = 'var(--muted)';
+  try {
+    const explorerBase = network === 'base' ? 'https://basescan.org' : 'https://sepolia.basescan.org';
+    el.innerHTML = `Valid address on ${network === 'base' ? 'Base Mainnet' : 'Base Sepolia'} &mdash; <a class="tx-link" href="${explorerBase}/address/${addr}" target="_blank">View on Explorer</a>`;
+    el.style.color = 'var(--green)';
+    localStorage.setItem('rt-base-connected', network);
+    updateNetworkLabels();
+  } catch (e) {
+    el.textContent = `Error: ${e.message}`;
+    el.style.color = 'var(--red)';
+  }
+}
+
+async function testSkale() {
+  const el = document.getElementById('test-skale-result');
+  const rpcUrl = document.getElementById('input-skale-rpc').value.trim();
+  if (!rpcUrl) {
+    el.textContent = 'Enter a SKALE RPC URL first';
+    el.style.color = 'var(--red)';
+    return;
+  }
+  el.textContent = 'Checking...';
+  el.style.color = 'var(--muted)';
+  try {
+    const r = await fetch('/rpc-proxy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rpcUrl, body: { jsonrpc: '2.0', method: 'eth_chainId', params: [], id: 1 } }),
+    });
+    const d = await r.json();
+    if (d.error && !d.result) throw new Error(d.detail || d.error);
+    if (d.result) {
+      const chainId = parseInt(d.result, 16);
+      el.innerHTML = `Connected — Chain ID: ${chainId}`;
+      el.style.color = 'var(--green)';
+      const skaleNet = document.getElementById('input-skale-network').value;
+      const rpcUrl = document.getElementById('input-skale-rpc').value;
+      localStorage.setItem('rt-skale-connected', skaleNet + '|' + rpcUrl);
+      updateNetworkLabels();
+    } else {
+      el.textContent = 'RPC responded but no chain ID returned';
+      el.style.color = 'var(--orange)';
+    }
+  } catch (e) {
+    el.textContent = `Failed to connect: ${e.message}`;
+    el.style.color = 'var(--red)';
+  }
+}
+
+// ── Tab switching ────────────────────────────────────────────────────
+function switchTab(tab) {
+  activeTab = tab;
+  ['routes', 'requests', 'debug'].forEach(t => {
+    document.getElementById('tab-' + t).style.display = t === tab ? '' : 'none';
+    document.getElementById('nav-' + t).className = t === tab ? 'active' : '';
+  });
+  document.getElementById('routes-import-cta').style.display = 'none';
+  if (tab === 'routes') loadRoutes();
+  else if (tab === 'requests') loadRequests();
+}
+
+// ── Polling ──────────────────────────────────────────────────────────
+function startPolling() {
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(refreshAll, 10000);
+}
+
+async function refreshAll() {
+  await Promise.all([refreshHealth(), refreshStats()]);
+  if (activeTab === 'requests' && document.getElementById('requests-auto-refresh').checked) {
+    loadRequests();
+  }
+}
+
+// ── Health ───────────────────────────────────────────────────────────
+async function refreshHealth() {
+  const dot = document.getElementById('conn-dot');
+  const label = document.getElementById('conn-label');
+  try {
+    const r = await api('/admin/health');
+    if (!r.ok) throw new Error(r.statusText);
+    const d = await r.json();
+    dot.className = 'conn-dot online';
+    label.textContent = 'x402 API Gateway';
+    document.getElementById('conn-status').textContent = 'Online';
+    document.getElementById('conn-status').style.color = 'var(--green)';
+    document.getElementById('conn-uptime').textContent = d.uptime_human || '-';
+    document.getElementById('conn-routes').textContent = d.route_count;
+    document.getElementById('conn-receipts').textContent = d.receipt_count;
+    const gwUrl = gatewayUrl || 'http://localhost:4402';
+    const endpointEl = document.getElementById('conn-endpoint');
+    endpointEl.textContent = gwUrl;
+    endpointEl.href = gwUrl + '/health';
+    const docsEl = document.getElementById('conn-docs');
+    docsEl.textContent = gwUrl + '/docs';
+    docsEl.href = gwUrl + '/docs';
+    document.getElementById('conn-endpoint-row').style.display = '';
+    document.getElementById('conn-docs-row').style.display = '';
+  } catch {
+    dot.className = 'conn-dot offline';
+    label.textContent = 'x402 API Gateway';
+    document.getElementById('conn-status').textContent = 'Unreachable';
+    document.getElementById('conn-status').style.color = 'var(--red)';
+    document.getElementById('conn-uptime').textContent = '-';
+    document.getElementById('conn-routes').textContent = '-';
+    document.getElementById('conn-receipts').textContent = '-';
+    document.getElementById('conn-endpoint-row').style.display = 'none';
+    document.getElementById('conn-docs-row').style.display = 'none';
+  }
+}
+
+// ── Stats ────────────────────────────────────────────────────────────
+async function refreshStats() {
+  try {
+    const r = await api('/admin/receipts/stats');
+    if (!r.ok) return;
+    const d = await r.json();
+    document.getElementById('stat-usdc').textContent = parseFloat(d.total_usdc_spent).toFixed(2);
+  } catch {}
+}
+
+// ── Routes ───────────────────────────────────────────────────────────
+async function loadRoutes() {
+  try {
+    const r = await api('/admin/routes');
+    if (!r.ok) return;
+    const d = await r.json();
+    const container = document.getElementById('routes-grouped');
+
+    // Update tool_id filter dropdown
+    const filterEl = document.getElementById('filter-tool-id');
+    const currentVal = filterEl.value;
+    const toolIds = [...new Set(d.routes.map(r => r.tool_id))];
+    filterEl.innerHTML = '<option value="">All Tools</option>' +
+      toolIds.map(id => `<option value="${esc(id)}">${esc(id)}</option>`).join('');
+    filterEl.value = currentVal;
+
+    const importCta = document.getElementById('routes-import-cta');
+    const navRoutes = document.getElementById('nav-routes');
+    const sepRoutes = document.getElementById('sep-routes');
+    if (d.routes.length === 0) {
+      container.innerHTML = '';
+      ['routes', 'requests'].forEach(t => {
+        document.getElementById('tab-' + t).style.display = 'none';
+      });
+      if (activeTab !== 'debug') importCta.style.display = 'block';
+      navRoutes.style.display = 'none';
+      sepRoutes.style.display = 'none';
+      document.getElementById('nav-requests').style.display = 'none';
+      document.getElementById('sep-requests').style.display = 'none';
+      return;
+    }
+    importCta.style.display = 'none';
+    navRoutes.style.display = '';
+    sepRoutes.style.display = '';
+    document.getElementById('nav-requests').style.display = '';
+    document.getElementById('sep-requests').style.display = '';
+    // Split into enabled and disabled routes
+    const enabledRoutes = d.routes.filter(r => !r.restricted);
+    const disabledRoutes = d.routes.filter(r => r.restricted === true);
+
+    function buildGroupedRows(routeList, prefix) {
+      const groups = {};
+      for (const route of routeList) {
+        const groupKey = extractPathGroup(route.path);
+        if (!groups[groupKey]) groups[groupKey] = [];
+        groups[groupKey].push(route);
+      }
+      const sortedKeys = Object.keys(groups).sort();
+      let rows = '';
+      for (const key of sortedKeys) {
+        const routes = groups[key];
+        const gid = prefix + '-' + key;
+        rows += `<tr class="group-header-row" onclick="toggleGroup('${esc(gid)}')">
+          <td colspan="5">
+            <span class="chevron open" id="chevron-${esc(gid)}">&#9654;</span>
+            <span class="group-name">/${esc(key)}</span>
+          </td>
+        </tr>`;
+        for (const r of routes) {
+          const restricted = r.restricted === true;
+          const desc = r.description || r.tool_id || '';
+          rows += `<tr class="group-route-row${restricted ? ' route-restricted' : ''}" data-group="${esc(gid)}" data-tool="${esc(r.tool_id)}">
+            <td><span class="method-tag method-${esc(r.method)}">${esc(r.method)}</span></td>
+            <td class="mono">${esc(r.path)}</td>
+            <td class="route-desc">${esc(desc)}</td>
+            <td class="route-price-cell">
+              ${restricted
+                ? '<span class="restricted-label">DISABLED</span>'
+                : `<span class="price-display">${esc(r.price_usdc)}</span><span class="price-unit">USDC</span>
+                   <input class="editable-price price-input" value="${esc(r.price_usdc)}" style="display:none"
+                     onchange="saveRoutePrice('${esc(r.tool_id)}', this)" onblur="cancelPriceEdit(this)"
+                     onkeydown="if(event.key==='Escape')cancelPriceEdit(this);if(event.key==='Enter')this.onchange()" />`}
+            </td>
+            <td class="route-actions">
+              <button class="btn btn-sm ${restricted ? 'btn-green' : 'btn-restrict'}" onclick="toggleRouteAccess('${esc(r.tool_id)}', ${restricted})">${restricted ? 'Enable' : 'Disable'}</button>
+              ${restricted ? '' : '<button class="btn btn-sm" onclick="startPriceEdit(this)">Edit Price</button>'}
+            </td>
+          </tr>`;
+        }
+      }
+      return rows;
+    }
+
+    const tableHead = `<thead><tr>
+      <th style="width:80px">Method</th>
+      <th>Path</th>
+      <th>Description</th>
+      <th style="width:160px">Price</th>
+      <th style="width:170px">Actions</th>
+    </tr></thead>`;
+
+    let html = '';
+
+    // Enabled Routes
+    html += `<h3 class="routes-section-title">Enabled Routes <span class="routes-section-count">${enabledRoutes.length}</span></h3>`;
+    if (enabledRoutes.length > 0) {
+      html += `<table class="routes-table">${tableHead}<tbody>${buildGroupedRows(enabledRoutes, 'en')}</tbody></table>`;
+    } else {
+      html += '<div class="empty-state" style="padding:20px">No enabled routes</div>';
+    }
+
+    // Disabled Routes
+    if (disabledRoutes.length > 0) {
+      html += `<h3 class="routes-section-title" style="margin-top:24px">Disabled Routes <span class="routes-section-count">${disabledRoutes.length}</span></h3>`;
+      html += `<table class="routes-table">${tableHead}<tbody>${buildGroupedRows(disabledRoutes, 'dis')}</tbody></table>`;
+    }
+
+    container.innerHTML = html;
+  } catch (e) { console.error('loadRoutes error:', e); }
+}
+
+function extractPathGroup(path) {
+  const segments = path.split('/').filter(Boolean);
+  for (const seg of segments) {
+    if (seg === 'api' || /^v\d+$/.test(seg)) continue;
+    if (seg.startsWith(':') || seg === '*') continue;
+    return seg;
+  }
+  return 'other';
+}
+
+function toggleGroup(id) {
+  const chevron = document.getElementById('chevron-' + id);
+  if (chevron) chevron.classList.toggle('open');
+  document.querySelectorAll(`.group-route-row[data-group="${id}"]`).forEach(row => {
+    row.classList.toggle('hidden');
+  });
+}
+
+function startPriceEdit(btn) {
+  const row = btn.closest('tr');
+  const display = row.querySelector('.price-display');
+  const input = row.querySelector('.price-input');
+  display.style.display = 'none';
+  input.style.display = '';
+  input.focus();
+  input.select();
+}
+
+function cancelPriceEdit(input) {
+  const row = input.closest('tr');
+  const display = row.querySelector('.price-display');
+  input.style.display = 'none';
+  input.value = display.textContent;
+  display.style.display = '';
+}
+
+async function saveRoutePrice(toolId, input) {
+  const row = input.closest('tr');
+  const display = row.querySelector('.price-display');
+  try {
+    await api('/admin/routes/' + encodeURIComponent(toolId), {
+      method: 'PUT',
+      body: JSON.stringify({ price_usdc: input.value }),
+    });
+    display.textContent = input.value;
+  } catch {}
+  input.style.display = 'none';
+  display.style.display = '';
+}
+
+async function toggleRouteAccess(toolId, currentlyRestricted) {
+  try {
+    await api('/admin/routes/' + encodeURIComponent(toolId), {
+      method: 'PUT',
+      body: JSON.stringify({ restricted: !currentlyRestricted }),
+    });
+    loadRoutes();
+  } catch {}
+}
+
+function showGlobalPrice() {
+  document.getElementById('global-price-form').style.display = 'flex';
+  document.getElementById('btn-global-price').style.display = 'none';
+  document.getElementById('input-global-price').focus();
+}
+
+function hideGlobalPrice() {
+  document.getElementById('global-price-form').style.display = 'none';
+  document.getElementById('btn-global-price').style.display = '';
+}
+
+async function applyGlobalPrice() {
+  const price = document.getElementById('input-global-price').value.trim();
+  if (!price || isNaN(parseFloat(price))) return;
+  try {
+    const r = await api('/admin/routes');
+    if (!r.ok) return;
+    const d = await r.json();
+    for (const route of d.routes) {
+      if (route.restricted) continue;
+      await api('/admin/routes/' + encodeURIComponent(route.tool_id), {
+        method: 'PUT',
+        body: JSON.stringify({ price_usdc: price }),
+      });
+    }
+    hideGlobalPrice();
+    loadRoutes();
+  } catch {}
+}
+
+async function removeAllRoutes() {
+  if (!confirm('Are you sure you want to remove all routes? This cannot be undone.')) return;
+  try {
+    const r = await api('/admin/routes');
+    if (!r.ok) return;
+    const d = await r.json();
+    for (const route of d.routes) {
+      await api('/admin/routes/' + encodeURIComponent(route.tool_id), { method: 'DELETE' });
+    }
+    loadRoutes();
+    refreshHealth();
+  } catch {}
+}
+
+async function generateDocs() {
+  try {
+    const r = await api('/admin/docs/openapi');
+    if (!r.ok) return;
+    const gwUrl = gatewayUrl || 'http://localhost:4402';
+    window.open(gwUrl + '/docs', '_blank');
+  } catch {}
+}
+
+// ── Demo Settings ────────────────────────────────────────────────────
+async function loadDemoSettings() {
+  // Generate a random test API key
+  const demoKey = 'rt_test_' + Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b => b.toString(16).padStart(2, '0')).join('');
+
+  const demoRoutes = [
+    { method: 'GET', path: '/api/v1/search/:query', tool_id: 'search', price_usdc: '0.01', description: 'Search the web', provider: { provider_id: 'acme-data', backend_url: 'https://api.acme.com', auth: { header: 'Authorization', value: 'Bearer ' + demoKey } } },
+    { method: 'GET', path: '/api/v1/quote', tool_id: 'quote', price_usdc: '0.01', description: 'Get a stock quote', provider: { provider_id: 'acme-data', backend_url: 'https://api.acme.com', auth: { header: 'Authorization', value: 'Bearer ' + demoKey } } },
+    { method: 'POST', path: '/api/v1/analysis', tool_id: 'analysis', price_usdc: '0.05', description: 'Run data analysis', provider: { provider_id: 'acme-data', backend_url: 'https://api.acme.com', auth: { header: 'Authorization', value: 'Bearer ' + demoKey } } },
+  ];
+
+  // Add demo routes
+  for (const route of demoRoutes) {
+    try {
+      await api('/admin/routes', { method: 'POST', body: JSON.stringify(route) });
+    } catch {}
+  }
+
+  // Set demo config
+  document.getElementById('input-api-key').value = demoKey;
+  document.getElementById('input-wallet-address').value = '0x1234567890abcdef1234567890abcdef12345678';
+  document.getElementById('input-base-network').value = 'base-sepolia';
+  document.getElementById('input-skale-network').value = 'calypso-testnet';
+  document.getElementById('input-skale-rpc').value = 'https://testnet.skalenodes.com/v1/giant-half-dual-testnet';
+  document.getElementById('input-skale-contract').value = '0x64687C88C767D9a504c392C07393980af2879dC1';
+  await saveDashboardConfig();
+
+  await loadRoutes();
+  refreshHealth();
+  switchTab('routes');
+}
+
+// ── Import API ───────────────────────────────────────────────────────
+function openImportModal() {
+  // Preload auth from settings
+  const apiKey = document.getElementById('input-api-key').value.trim();
+  if (apiKey) {
+    document.getElementById('import-auth-header').value = 'Authorization';
+    document.getElementById('import-auth-value').value = 'Bearer ' + apiKey;
+  }
+  document.getElementById('import-modal').classList.add('open');
+}
+function closeImportModal() {
+  document.getElementById('import-modal').classList.remove('open');
+}
+
+function loadImportFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    document.getElementById('import-spec').value = e.target.result;
+  };
+  reader.readAsText(file);
+}
+
+async function fetchOpenApiFromUrl() {
+  const url = document.getElementById('import-spec-url').value.trim();
+  const statusEl = document.getElementById('fetch-spec-status');
+  if (!url) { statusEl.textContent = 'Enter a URL first'; statusEl.style.color = 'var(--red)'; return; }
+  statusEl.textContent = 'Fetching...'; statusEl.style.color = 'var(--muted)';
+  try {
+    const r = await fetch('/fetch-spec', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'Fetch failed');
+    document.getElementById('import-spec').value = d.text;
+    statusEl.textContent = 'Loaded successfully'; statusEl.style.color = 'var(--green)';
+    previewImport();
+  } catch (e) {
+    statusEl.textContent = 'Error: ' + e.message; statusEl.style.color = 'var(--red)';
+  }
+}
+
+function parseSpecInput() {
+  const raw = document.getElementById('import-spec').value.trim();
+  if (!raw) throw new Error('No spec provided');
+  try {
+    return JSON.parse(raw);
+  } catch {
+    // Try YAML
+    if (typeof jsyaml !== 'undefined') {
+      return jsyaml.load(raw);
+    }
+    throw new Error('Invalid JSON (js-yaml not loaded for YAML parsing)');
+  }
+}
+
+function previewImport() {
+  const statusEl = document.getElementById('import-status');
+  const previewEl = document.getElementById('import-preview');
+  try {
+    const spec = parseSpecInput();
+    // Auto-fill backend URL from spec servers
+    if (spec.servers && spec.servers.length > 0 && !document.getElementById('import-backend-url').value.trim()) {
+      const serverUrl = spec.servers[0].url;
+      document.getElementById('import-backend-url').value = serverUrl;
+      try {
+        const u = new URL(serverUrl);
+        if (!document.getElementById('import-provider-id').value.trim()) {
+          document.getElementById('import-provider-id').value = u.hostname.replace(/\./g, '-');
+        }
+      } catch {}
+    }
+    const paths = spec.paths || {};
+    const routes = [];
+    const methods = ['get','post','put','delete','patch','head','options'];
+    for (const [path, pathItem] of Object.entries(paths)) {
+      for (const [method, op] of Object.entries(pathItem)) {
+        if (!methods.includes(method.toLowerCase())) continue;
+        routes.push({
+          method: method.toUpperCase(),
+          path,
+          operationId: op.operationId || '',
+          summary: op.summary || op.description || '',
+        });
+      }
+    }
+
+    if (routes.length === 0) {
+      previewEl.innerHTML = '<div style="color:var(--orange);font-size:12px">No routes found in spec</div>';
+      return;
+    }
+
+    previewEl.innerHTML = `
+      <div style="font-size:12px;font-weight:600;margin-bottom:8px">${routes.length} routes found:</div>
+      <table class="preview-table">
+        <thead><tr><th>Method</th><th>Path</th><th>Operation</th><th>Summary</th></tr></thead>
+        <tbody>${routes.map(r => `<tr>
+          <td><span class="method-tag method-${esc(r.method)}">${esc(r.method)}</span></td>
+          <td class="mono">${esc(r.path)}</td>
+          <td class="mono">${esc(r.operationId)}</td>
+          <td>${esc(r.summary)}</td>
+        </tr>`).join('')}</tbody>
+      </table>`;
+    statusEl.textContent = '';
+  } catch (e) {
+    previewEl.innerHTML = '';
+    statusEl.textContent = e.message;
+    statusEl.style.color = 'var(--red)';
+  }
+}
+
+async function executeImport() {
+  const statusEl = document.getElementById('import-status');
+  try {
+    const spec = parseSpecInput();
+    const defaults = {
+      providerId: document.getElementById('import-provider-id').value.trim(),
+      backendUrl: document.getElementById('import-backend-url').value.trim(),
+      priceUsdc: document.getElementById('import-price').value.trim(),
+    };
+
+    if (!defaults.providerId || !defaults.backendUrl || !defaults.priceUsdc) {
+      statusEl.textContent = 'Provider ID, Backend URL, and Price are required';
+      statusEl.style.color = 'var(--red)';
+      return;
+    }
+
+    const authHeader = document.getElementById('import-auth-header').value.trim();
+    const authValue = document.getElementById('import-auth-value').value.trim();
+    if (authHeader) defaults.authHeader = authHeader;
+    if (authValue) defaults.authValue = authValue;
+
+    const r = await api('/admin/routes/import', {
+      method: 'POST',
+      body: JSON.stringify({ openapi: spec, defaults }),
+    });
+    const d = await r.json();
+    if (r.ok) {
+      statusEl.textContent = `Imported ${d.added_count} routes` +
+        (d.skipped_count > 0 ? ` (${d.skipped_count} skipped)` : '');
+      statusEl.style.color = 'var(--green)';
+      loadRoutes();
+      refreshHealth();
+      setTimeout(() => closeImportModal(), 2000);
+    } else {
+      statusEl.textContent = d.error || 'Import failed';
+      statusEl.style.color = 'var(--red)';
+    }
+  } catch (e) {
+    statusEl.textContent = e.message;
+    statusEl.style.color = 'var(--red)';
+  }
+}
+
+// ── Requests ─────────────────────────────────────────────────────────
+async function loadRequests() {
+  try {
+    const toolId = document.getElementById('filter-tool-id').value;
+    const outcome = document.getElementById('filter-outcome').value;
+    const limit = document.getElementById('filter-limit').value || '50';
+    let qs = `?limit=${limit}`;
+    if (toolId) qs += `&tool_id=${encodeURIComponent(toolId)}`;
+    if (outcome) qs += `&outcome=${encodeURIComponent(outcome)}`;
+
+    const r = await api('/admin/receipts' + qs);
+    if (!r.ok) return;
+    const d = await r.json();
+    allReceipts = d.receipts;
+    const body = document.getElementById('requests-body');
+    const empty = document.getElementById('requests-empty');
+
+    if (d.receipts.length === 0) {
+      body.innerHTML = '';
+      empty.style.display = 'flex';
+      return;
+    }
+    empty.style.display = 'none';
+
+    const baseNetwork = dashboardConfig?.baseNetwork || 'base-sepolia';
+
+    body.innerHTML = d.receipts.map((r, i) => `<tr onclick="toggleDetail(${i})" style="cursor:pointer">
+      <td class="mono">${fmtTime(r.timestamp)}</td>
+      <td>${esc(r.tool_id)}</td>
+      <td><span class="method-tag method-${esc(r.method)}">${esc(r.method)}</span></td>
+      <td class="mono">${esc(r.endpoint)}</td>
+      <td class="outcome-${esc(r.outcome)}">${esc(r.outcome)}</td>
+      <td class="mono">${r.latency_ms != null ? r.latency_ms + 'ms' : '-'}</td>
+      <td class="mono">$${esc(r.price_usdc)}</td>
+      <td class="mono">${formatTxHash(r.payment_tx_hash, baseNetwork)}</td>
+      <td class="mono">${formatReceiptLink(r)}</td>
+    </tr>
+    <tr class="detail-row" id="detail-${i}">
+      <td colspan="9"><div class="detail-pre">${esc(JSON.stringify(r, null, 2))}</div></td>
+    </tr>`).join('');
+  } catch {}
+}
+
+function formatTxHash(hash, network) {
+  if (!hash) return '-';
+  const explorerBase = network === 'base' ? 'https://basescan.org' : 'https://sepolia.basescan.org';
+  const short = hash.slice(0, 8) + '...' + hash.slice(-4);
+  return `<a class="tx-link" href="${explorerBase}/tx/${esc(hash)}" target="_blank" onclick="event.stopPropagation()" title="${esc(hash)}">${short}</a>`;
+}
+
+function formatReceiptLink(receipt) {
+  if (!receipt.receipt_id) return '-';
+  const short = String(receipt.receipt_id).slice(0, 8) + '...';
+  return `<span class="tx-link" onclick="event.stopPropagation();toggleDetail(${allReceipts.indexOf(receipt)})" title="View receipt">${short}</span>`;
+}
+
+function toggleDetail(idx) {
+  document.getElementById('detail-' + idx).classList.toggle('open');
+}
+
+function exportReceipts() {
+  if (allReceipts.length === 0) return;
+  const blob = new Blob([JSON.stringify(allReceipts, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `requests-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────
+function esc(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function fmtTime(iso) {
+  if (!iso) return '-';
+  const d = new Date(iso);
+  return d.toLocaleTimeString('en-US', { hour12: false }) + '.' +
+    String(d.getMilliseconds()).padStart(3, '0');
+}
+
+// ── Debug Tests ──────────────────────────────────────────────────────
+let debugCounts = { pass: 0, fail: 0, skip: 0 };
+
+async function debugApiFetch(path, opts = {}) {
+  const fetchOpts = { method: opts.method || 'GET', headers: { ...(opts.headers || {}) } };
+  if (opts.body) {
+    fetchOpts.headers['Content-Type'] = 'application/json';
+    fetchOpts.body = JSON.stringify(opts.body);
+  }
+  return fetch('/api-test' + path, fetchOpts);
+}
+
+function setTestRunning(id) {
+  const card = document.getElementById('debug-' + id);
+  card.className = 'debug-card running';
+  card.querySelector('.debug-result').innerHTML = '<span class="debug-status-badge running">RUNNING...</span>';
+}
+
+function setTestResult(id, status, body) {
+  const card = document.getElementById('debug-' + id);
+  card.className = 'debug-card ' + status;
+  const bodyStr = typeof body === 'object' ? JSON.stringify(body, null, 2) : String(body);
+  card.querySelector('.debug-result').innerHTML =
+    `<span class="debug-status-badge ${status}">${status.toUpperCase()}</span><pre class="debug-body">${esc(bodyStr)}</pre>`;
+  debugCounts[status] = (debugCounts[status] || 0) + 1;
+  updateDebugSummary();
+}
+
+function updateDebugSummary() {
+  const el = document.getElementById('debug-summary');
+  const parts = [];
+  if (debugCounts.pass) parts.push(`<span style="color:var(--green)">${debugCounts.pass} PASS</span>`);
+  if (debugCounts.fail) parts.push(`<span style="color:var(--red)">${debugCounts.fail} FAIL</span>`);
+  if (debugCounts.skip) parts.push(`<span style="color:var(--orange)">${debugCounts.skip} SKIP</span>`);
+  el.innerHTML = parts.join(' &middot; ');
+}
+
+function clearAllTests() {
+  debugCounts = { pass: 0, fail: 0, skip: 0 };
+  document.querySelectorAll('.debug-card').forEach(card => {
+    card.className = 'debug-card';
+    card.querySelector('.debug-result').innerHTML = '';
+  });
+  document.getElementById('debug-summary').innerHTML = '';
+}
+
+function debugGetFirstEnabled(routes) { return routes.find(r => !r.restricted); }
+function debugGetFirstDisabled(routes) { return routes.find(r => r.restricted); }
+function debugConcretePath(path) { return path.replace(/:([^/]+)/g, 'test'); }
+
+async function debugLoadContext() {
+  let routes = [], cfg = null;
+  try { const r = await api('/admin/routes'); if (r.ok) routes = (await r.json()).routes || []; } catch {}
+  try { const r = await api('/admin/dashboard-config'); if (r.ok) cfg = await r.json(); } catch {}
+  return { routes, cfg };
+}
+
+async function runAllTests() {
+  clearAllTests();
+  const { routes, cfg } = await debugLoadContext();
+  await testHealthCheck();
+  await testRouteMatch(routes, cfg);
+  await testRouteNotFound();
+  await testRestrictedRoute(routes, cfg);
+  await testAuth401(routes, cfg);
+  await testAuthValid(routes, cfg);
+  // Rate Limit excluded — fires 105 requests
+  await testIdempotency(routes, cfg);
+  await testPaymentRequired(routes, cfg);
+  await testMandateSkipped(routes, cfg);
+  await testMandateRejected(routes, cfg);
+  await testBlacklistApi();
+  await testAgentAllowed(routes, cfg);
+  await testAgentBlocked(routes, cfg);
+  await testReceiptsStats();
+  await testReceiptsList();
+  await testReceiptsFilter();
+  await testAdminConfig();
+  await testDashboardConfigTest();
+  await testAdminRoutes();
+  await testOpenApiSpec();
+  await testSkaleRpc(cfg);
+  await testSkaleBlock(cfg);
+}
+
+async function testHealthCheck() {
+  setTestRunning('health');
+  try {
+    const r = await debugApiFetch('/health');
+    const d = await r.json();
+    setTestResult('health', r.status === 200 && d.status === 'ok' ? 'pass' : 'fail', d);
+  } catch (e) { setTestResult('health', 'fail', { error: e.message }); }
+}
+
+async function testRouteMatch(routes, cfg) {
+  if (!routes || !cfg) { const ctx = await debugLoadContext(); routes = routes || ctx.routes; cfg = cfg || ctx.cfg; }
+  setTestRunning('route-match');
+  const route = debugGetFirstEnabled(routes);
+  if (!route) { setTestResult('route-match', 'skip', 'No enabled routes'); return; }
+  try {
+    const path = debugConcretePath(route.path);
+    const headers = {};
+    if (cfg?.apiKey) headers['Authorization'] = `Bearer ${cfg.apiKey}`;
+    const r = await debugApiFetch(path, { headers });
+    const text = await r.text();
+    let d; try { d = JSON.parse(text); } catch { d = text; }
+    setTestResult('route-match', r.status !== 404 ? 'pass' : 'fail', { status: r.status, path, body: d });
+  } catch (e) { setTestResult('route-match', 'fail', { error: e.message }); }
+}
+
+async function testRouteNotFound() {
+  setTestRunning('route-404');
+  try {
+    const r = await debugApiFetch('/api/v1/__nonexistent__');
+    const text = await r.text();
+    let d; try { d = JSON.parse(text); } catch { d = text; }
+    setTestResult('route-404', r.status === 404 ? 'pass' : 'fail', { status: r.status, body: d });
+  } catch (e) { setTestResult('route-404', 'fail', { error: e.message }); }
+}
+
+async function testRestrictedRoute(routes, cfg) {
+  if (!routes || !cfg) { const ctx = await debugLoadContext(); routes = routes || ctx.routes; cfg = cfg || ctx.cfg; }
+  setTestRunning('route-restricted');
+  const route = debugGetFirstDisabled(routes);
+  if (!route) { setTestResult('route-restricted', 'skip', 'No disabled routes'); return; }
+  try {
+    const path = debugConcretePath(route.path);
+    const headers = {};
+    if (cfg?.apiKey) headers['Authorization'] = `Bearer ${cfg.apiKey}`;
+    const r = await debugApiFetch(path, { headers });
+    const text = await r.text();
+    let d; try { d = JSON.parse(text); } catch { d = text; }
+    setTestResult('route-restricted', 'pass', { status: r.status, path, body: d });
+  } catch (e) { setTestResult('route-restricted', 'fail', { error: e.message }); }
+}
+
+async function testAuth401(routes, cfg) {
+  if (!routes || !cfg) { const ctx = await debugLoadContext(); routes = routes || ctx.routes; cfg = cfg || ctx.cfg; }
+  setTestRunning('auth-401');
+  if (!cfg?.apiKey) { setTestResult('auth-401', 'skip', 'No API key configured'); return; }
+  const route = debugGetFirstEnabled(routes);
+  if (!route) { setTestResult('auth-401', 'skip', 'No enabled routes'); return; }
+  try {
+    const path = debugConcretePath(route.path);
+    const r = await debugApiFetch(path);
+    const text = await r.text();
+    let d; try { d = JSON.parse(text); } catch { d = text; }
+    setTestResult('auth-401', r.status === 401 ? 'pass' : 'fail', { status: r.status, body: d });
+  } catch (e) { setTestResult('auth-401', 'fail', { error: e.message }); }
+}
+
+async function testAuthValid(routes, cfg) {
+  if (!routes || !cfg) { const ctx = await debugLoadContext(); routes = routes || ctx.routes; cfg = cfg || ctx.cfg; }
+  setTestRunning('auth-valid');
+  if (!cfg?.apiKey) { setTestResult('auth-valid', 'skip', 'No API key configured'); return; }
+  const route = debugGetFirstEnabled(routes);
+  if (!route) { setTestResult('auth-valid', 'skip', 'No enabled routes'); return; }
+  try {
+    const path = debugConcretePath(route.path);
+    const r = await debugApiFetch(path, { headers: { 'Authorization': `Bearer ${cfg.apiKey}` } });
+    const text = await r.text();
+    let d; try { d = JSON.parse(text); } catch { d = text; }
+    setTestResult('auth-valid', r.status !== 401 ? 'pass' : 'fail', { status: r.status, body: d });
+  } catch (e) { setTestResult('auth-valid', 'fail', { error: e.message }); }
+}
+
+async function testRateLimit() {
+  setTestRunning('rate-limit');
+  try {
+    let got429 = false;
+    const promises = [];
+    for (let i = 0; i < 105; i++) {
+      promises.push(fetch('/api-test/health').then(r => { if (r.status === 429) got429 = true; return r.status; }));
+    }
+    const statuses = await Promise.all(promises);
+    const count429 = statuses.filter(s => s === 429).length;
+    setTestResult('rate-limit', got429 ? 'pass' : 'fail', { total: 105, got429: count429, last10: statuses.slice(-10) });
+  } catch (e) { setTestResult('rate-limit', 'fail', { error: e.message }); }
+}
+
+async function testIdempotency(routes, cfg) {
+  if (!routes || !cfg) { const ctx = await debugLoadContext(); routes = routes || ctx.routes; cfg = cfg || ctx.cfg; }
+  setTestRunning('idempotency');
+  const route = debugGetFirstEnabled(routes);
+  if (!route) { setTestResult('idempotency', 'skip', 'No enabled routes'); return; }
+  try {
+    const path = debugConcretePath(route.path);
+    const idemKey = 'debug-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+    const headers = { 'X-Request-Idempotency-Key': idemKey };
+    if (cfg?.apiKey) headers['Authorization'] = `Bearer ${cfg.apiKey}`;
+    await debugApiFetch(path, { headers });
+    const r2 = await debugApiFetch(path, { headers });
+    const text = await r2.text();
+    let d; try { d = JSON.parse(text); } catch { d = text; }
+    setTestResult('idempotency', r2.status === 409 ? 'pass' : 'fail', { status: r2.status, key: idemKey, body: d });
+  } catch (e) { setTestResult('idempotency', 'fail', { error: e.message }); }
+}
+
+async function testPaymentRequired(routes, cfg) {
+  if (!routes || !cfg) { const ctx = await debugLoadContext(); routes = routes || ctx.routes; cfg = cfg || ctx.cfg; }
+  setTestRunning('payment-402');
+  const route = routes.find(r => !r.restricted && parseFloat(r.price_usdc || '0') > 0);
+  if (!route) { setTestResult('payment-402', 'skip', 'No paid routes configured'); return; }
+  if (!cfg?.payToAddress) { setTestResult('payment-402', 'skip', 'No pay-to address configured (x402 disabled)'); return; }
+  try {
+    const path = debugConcretePath(route.path);
+    const headers = {};
+    if (cfg?.apiKey) headers['Authorization'] = `Bearer ${cfg.apiKey}`;
+    const r = await debugApiFetch(path, { headers });
+    const text = await r.text();
+    let d; try { d = JSON.parse(text); } catch { d = text; }
+    if (r.status === 402) {
+      setTestResult('payment-402', 'pass', { status: 402, body: d });
+    } else if (r.status === 502 && d?.reason_code === 'UPSTREAM_ERROR_NO_CHARGE') {
+      setTestResult('payment-402', 'pass', { status: r.status, note: 'Route matched with pricing ($' + route.price_usdc + '), upstream unreachable (demo). x402 facilitator may need configuration.', body: d });
+    } else {
+      setTestResult('payment-402', 'fail', { status: r.status, body: d });
+    }
+  } catch (e) { setTestResult('payment-402', 'fail', { error: e.message }); }
+}
+
+async function testMandateSkipped(routes, cfg) {
+  if (!routes || !cfg) { const ctx = await debugLoadContext(); routes = routes || ctx.routes; cfg = cfg || ctx.cfg; }
+  setTestRunning('mandate-skipped');
+  const route = debugGetFirstEnabled(routes);
+  if (!route) { setTestResult('mandate-skipped', 'skip', 'No enabled routes'); return; }
+  try {
+    const path = debugConcretePath(route.path);
+    const headers = {};
+    if (cfg?.apiKey) headers['Authorization'] = `Bearer ${cfg.apiKey}`;
+    const r = await debugApiFetch(path, { headers });
+    const text = await r.text();
+    let d; try { d = JSON.parse(text); } catch { d = text; }
+    const mandateBlocked = r.status === 403 && (d?.reason_code || '').startsWith('MANDATE_');
+    if (mandateBlocked) {
+      setTestResult('mandate-skipped', 'fail', { status: r.status, note: 'Request blocked by mandate middleware', body: d });
+    } else {
+      const verdict = d?.mandate_verdict || 'SKIPPED';
+      setTestResult('mandate-skipped', 'pass', { status: r.status, mandate_verdict: verdict, note: 'No mandate required, request proceeded' });
+    }
+  } catch (e) { setTestResult('mandate-skipped', 'fail', { error: e.message }); }
+}
+
+async function testMandateRejected(routes, cfg) {
+  if (!routes || !cfg) { const ctx = await debugLoadContext(); routes = routes || ctx.routes; cfg = cfg || ctx.cfg; }
+  setTestRunning('mandate-rejected');
+  const route = debugGetFirstEnabled(routes);
+  if (!route) { setTestResult('mandate-rejected', 'skip', 'No enabled routes'); return; }
+  try {
+    const path = debugConcretePath(route.path);
+    const headers = { 'X-Mandate': 'not-valid-base64!!!' };
+    if (cfg?.apiKey) headers['Authorization'] = `Bearer ${cfg.apiKey}`;
+    const r = await debugApiFetch(path, { headers });
+    const text = await r.text();
+    let d; try { d = JSON.parse(text); } catch { d = text; }
+    setTestResult('mandate-rejected', r.status === 400 ? 'pass' : 'fail', { status: r.status, body: d });
+  } catch (e) { setTestResult('mandate-rejected', 'fail', { error: e.message }); }
+}
+
+async function testBlacklistApi() {
+  setTestRunning('blacklist-api');
+  try {
+    const r = await api('/admin/blacklist');
+    const d = await r.json();
+    setTestResult('blacklist-api', r.ok && Array.isArray(d.blacklist) ? 'pass' : 'fail', d);
+  } catch (e) { setTestResult('blacklist-api', 'fail', { error: e.message }); }
+}
+
+async function testAgentAllowed(routes, cfg) {
+  if (!routes || !cfg) { const ctx = await debugLoadContext(); routes = routes || ctx.routes; cfg = cfg || ctx.cfg; }
+  setTestRunning('agent-allowed');
+  const route = debugGetFirstEnabled(routes);
+  if (!route) { setTestResult('agent-allowed', 'skip', 'No enabled routes'); return; }
+  try {
+    const path = debugConcretePath(route.path);
+    const testAddr = '0x' + 'a'.repeat(40);
+    const headers = { 'X-Agent-Address': testAddr };
+    if (cfg?.apiKey) headers['Authorization'] = `Bearer ${cfg.apiKey}`;
+    const r = await debugApiFetch(path, { headers });
+    const text = await r.text();
+    let d; try { d = JSON.parse(text); } catch { d = text; }
+    const blocked = r.status === 403 && d?.reason_code === 'AGENT_BLOCKED';
+    setTestResult('agent-allowed', !blocked ? 'pass' : 'fail', { status: r.status, agent: testAddr, note: blocked ? 'Agent is blacklisted' : 'Agent not on blacklist, request proceeded' });
+  } catch (e) { setTestResult('agent-allowed', 'fail', { error: e.message }); }
+}
+
+async function testAgentBlocked(routes, cfg) {
+  if (!routes || !cfg) { const ctx = await debugLoadContext(); routes = routes || ctx.routes; cfg = cfg || ctx.cfg; }
+  setTestRunning('agent-blocked');
+  const route = debugGetFirstEnabled(routes);
+  if (!route) { setTestResult('agent-blocked', 'skip', 'No enabled routes'); return; }
+  const testAddr = '0xDEAD' + 'b'.repeat(36);
+  try {
+    // Add to blacklist
+    const addR = await api('/admin/blacklist', {
+      method: 'POST',
+      body: JSON.stringify({ address: testAddr }),
+    });
+    if (!addR.ok) { setTestResult('agent-blocked', 'fail', { error: 'Failed to add to blacklist', status: addR.status }); return; }
+
+    // Make request with blacklisted agent
+    const path = debugConcretePath(route.path);
+    const headers = { 'X-Agent-Address': testAddr };
+    if (cfg?.apiKey) headers['Authorization'] = `Bearer ${cfg.apiKey}`;
+    const r = await debugApiFetch(path, { headers });
+    const text = await r.text();
+    let d; try { d = JSON.parse(text); } catch { d = text; }
+
+    // Remove from blacklist (cleanup)
+    await api('/admin/blacklist/' + encodeURIComponent(testAddr), { method: 'DELETE' });
+
+    const blocked = r.status === 403 && d?.reason_code === 'AGENT_BLOCKED';
+    setTestResult('agent-blocked', blocked ? 'pass' : 'fail', { status: r.status, agent: testAddr, body: d });
+  } catch (e) {
+    // Cleanup on error
+    try { await api('/admin/blacklist/' + encodeURIComponent(testAddr), { method: 'DELETE' }); } catch {}
+    setTestResult('agent-blocked', 'fail', { error: e.message });
+  }
+}
+
+async function testReceiptsStats() {
+  setTestRunning('receipts-stats');
+  try {
+    const r = await api('/admin/receipts/stats');
+    const d = await r.json();
+    setTestResult('receipts-stats', r.ok && 'total_requests' in d ? 'pass' : 'fail', d);
+  } catch (e) { setTestResult('receipts-stats', 'fail', { error: e.message }); }
+}
+
+async function testReceiptsList() {
+  setTestRunning('receipts-list');
+  try {
+    const r = await api('/admin/receipts?limit=5');
+    const d = await r.json();
+    setTestResult('receipts-list', r.ok && Array.isArray(d.receipts) ? 'pass' : 'fail', d);
+  } catch (e) { setTestResult('receipts-list', 'fail', { error: e.message }); }
+}
+
+async function testReceiptsFilter() {
+  setTestRunning('receipts-filter');
+  try {
+    const r = await api('/admin/receipts?outcome=DENIED&limit=10');
+    const d = await r.json();
+    const ok = r.ok && Array.isArray(d.receipts) && d.receipts.every(r => r.outcome === 'DENIED');
+    setTestResult('receipts-filter', ok ? 'pass' : 'fail', d);
+  } catch (e) { setTestResult('receipts-filter', 'fail', { error: e.message }); }
+}
+
+async function testAdminConfig() {
+  setTestRunning('admin-config');
+  try {
+    const r = await api('/admin/config');
+    const d = await r.json();
+    setTestResult('admin-config', r.ok && ('port' in d || 'baseNetwork' in d) ? 'pass' : 'fail', d);
+  } catch (e) { setTestResult('admin-config', 'fail', { error: e.message }); }
+}
+
+async function testDashboardConfigTest() {
+  setTestRunning('admin-dashboard');
+  try {
+    const r = await api('/admin/dashboard-config');
+    const d = await r.json();
+    setTestResult('admin-dashboard', r.ok ? 'pass' : 'fail', d);
+  } catch (e) { setTestResult('admin-dashboard', 'fail', { error: e.message }); }
+}
+
+async function testAdminRoutes() {
+  setTestRunning('admin-routes');
+  try {
+    const r = await api('/admin/routes');
+    const d = await r.json();
+    setTestResult('admin-routes', r.ok && Array.isArray(d.routes) ? 'pass' : 'fail', d);
+  } catch (e) { setTestResult('admin-routes', 'fail', { error: e.message }); }
+}
+
+async function testOpenApiSpec() {
+  setTestRunning('openapi');
+  try {
+    const r = await api('/admin/docs/openapi');
+    const d = await r.json();
+    const ok = r.ok && d.openapi && d.openapi.startsWith('3.0') && d.paths;
+    setTestResult('openapi', ok ? 'pass' : 'fail', d);
+  } catch (e) { setTestResult('openapi', 'fail', { error: e.message }); }
+}
+
+async function testSkaleRpc(cfg) {
+  if (!cfg) { try { const r = await api('/admin/dashboard-config'); if (r.ok) cfg = await r.json(); } catch {} }
+  setTestRunning('skale-rpc');
+  if (!cfg?.skaleRpcUrl) { setTestResult('skale-rpc', 'skip', 'No SKALE RPC URL configured'); return; }
+  try {
+    const r = await fetch('/rpc-proxy', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rpcUrl: cfg.skaleRpcUrl, body: { jsonrpc: '2.0', method: 'eth_chainId', params: [], id: 1 } }),
+    });
+    const d = await r.json();
+    if (d.result) {
+      setTestResult('skale-rpc', 'pass', { chainId: parseInt(d.result, 16), raw: d.result });
+    } else { setTestResult('skale-rpc', 'fail', d); }
+  } catch (e) { setTestResult('skale-rpc', 'fail', { error: e.message }); }
+}
+
+async function testSkaleBlock(cfg) {
+  if (!cfg) { try { const r = await api('/admin/dashboard-config'); if (r.ok) cfg = await r.json(); } catch {} }
+  setTestRunning('skale-block');
+  if (!cfg?.skaleRpcUrl) { setTestResult('skale-block', 'skip', 'No SKALE RPC URL configured'); return; }
+  try {
+    const r = await fetch('/rpc-proxy', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rpcUrl: cfg.skaleRpcUrl, body: { jsonrpc: '2.0', method: 'eth_blockNumber', params: [], id: 1 } }),
+    });
+    const d = await r.json();
+    if (d.result) {
+      setTestResult('skale-block', 'pass', { blockNumber: parseInt(d.result, 16), raw: d.result });
+    } else { setTestResult('skale-block', 'fail', d); }
+  } catch (e) { setTestResult('skale-block', 'fail', { error: e.message }); }
+}
+</script>
+</body>
+</html>

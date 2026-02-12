@@ -1,0 +1,12 @@
+{
+  "name": "requesttap-router-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Admin dashboard for RequestTap Router Gateway",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0"
+  }
+}
