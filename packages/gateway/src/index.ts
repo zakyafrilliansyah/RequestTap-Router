@@ -3,6 +3,7 @@ import { createApp, type CreateAppOptions, type RouteManager } from "./server.js
 import type { RouteRule } from "./routing.js";
 import { loadRoutesFromFile } from "./routes-loader.js";
 import { logger } from "./utils/logger.js";
+import { assertNotX402Upstream, X402UpstreamError } from "./utils/x402-probe.js";
 import type { Express } from "express";
 import type { Server } from "http";
 
@@ -14,6 +15,7 @@ export { InMemoryReplayStore, checkReplay, type ReplayStore } from "./replay.js"
 export { SpendTracker, verifyMandate, mandateSigningPayload } from "./ap2.js";
 export { requestHash, hashBytes, canonicalString } from "./hash.js";
 export { isPrivateOrReserved, assertNotSSRF, SSRFError } from "./utils/ssrf.js";
+export { assertNotX402Upstream, X402UpstreamError } from "./utils/x402-probe.js";
 export { ReceiptStore } from "./services/receipt-store.js";
 export { createBiteService, type BiteService } from "./bite.js";
 export { loadRoutesFromFile } from "./routes-loader.js";
@@ -52,6 +54,21 @@ export function createGateway(overrides?: {
     config,
     routeManager,
     async start() {
+      // Probe routes for x402 upstream wrapping before accepting traffic
+      const loaded = routeManager.getRoutes();
+      for (const route of loaded) {
+        try {
+          await assertNotX402Upstream(route.provider.backend_url, route.path);
+        } catch (err) {
+          if (err instanceof X402UpstreamError) {
+            logger.warn(
+              `Skipping route "${route.tool_id}": upstream already supports x402 payments (${route.provider.backend_url})`,
+            );
+            routeManager.removeRoute(route.tool_id);
+          }
+        }
+      }
+
       return new Promise((resolve) => {
         server = app.listen(config.port, () => {
           logger.info(`RequestTap Gateway listening on port ${config.port}`);

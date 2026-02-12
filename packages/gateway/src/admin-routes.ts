@@ -8,6 +8,7 @@ import type { GatewayConfig } from "./config.js";
 import type { ConfigStore } from "./services/config-store.js";
 import { parseOpenApiToRoutes } from "./services/openapi-parser.js";
 import { generateAgentApiDocs } from "./services/docs-generator.js";
+import { assertNotX402Upstream, X402UpstreamError } from "./utils/x402-probe.js";
 
 export interface AdminRouterDeps {
   routeManager: RouteManager;
@@ -59,6 +60,7 @@ export function createAdminRouter(deps: AdminRouterDeps): Router {
       price_usdc: r.price_usdc,
       group: r.group || null,
       description: r.description || null,
+      restricted: r.restricted || false,
       provider: {
         provider_id: r.provider.provider_id,
         backend_url: r.provider.backend_url,
@@ -71,7 +73,7 @@ export function createAdminRouter(deps: AdminRouterDeps): Router {
   });
 
   // POST /admin/routes
-  router.post("/routes", (req, res) => {
+  router.post("/routes", async (req, res) => {
     const { method, path, tool_id, price_usdc, provider } = req.body;
 
     // Validate required fields
@@ -113,8 +115,13 @@ export function createAdminRouter(deps: AdminRouterDeps): Router {
     };
 
     try {
+      await assertNotX402Upstream(rule.provider.backend_url, rule.path);
       routeManager.addRoute(rule);
     } catch (err: any) {
+      if (err instanceof X402UpstreamError) {
+        res.status(400).json({ error: err.message, reason: "X402_UPSTREAM_BLOCKED" });
+        return;
+      }
       res.status(400).json({ error: err.message });
       return;
     }
@@ -260,6 +267,7 @@ export function createAdminRouter(deps: AdminRouterDeps): Router {
     if (typeof body.price_usdc === "string") existing.price_usdc = body.price_usdc;
     if (typeof body.group === "string" || body.group === null) existing.group = body.group || undefined;
     if (typeof body.description === "string") existing.description = body.description;
+    if (typeof body.restricted === "boolean") existing.restricted = body.restricted;
     if (body.provider && typeof body.provider === "object") {
       if (body.provider.backend_url) existing.provider.backend_url = body.provider.backend_url;
       if (body.provider.provider_id) existing.provider.provider_id = body.provider.provider_id;
@@ -279,7 +287,7 @@ export function createAdminRouter(deps: AdminRouterDeps): Router {
   });
 
   // POST /admin/routes/import
-  router.post("/routes/import", (req, res) => {
+  router.post("/routes/import", async (req, res) => {
     const { openapi, defaults } = req.body;
 
     if (!openapi || typeof openapi !== "object") {
@@ -307,10 +315,15 @@ export function createAdminRouter(deps: AdminRouterDeps): Router {
     const skipped: string[] = [];
     for (const rule of imported) {
       try {
+        await assertNotX402Upstream(rule.provider.backend_url, rule.path);
         routeManager.addRoute(rule);
         added.push(rule.tool_id);
-      } catch {
-        skipped.push(rule.tool_id);
+      } catch (err) {
+        if (err instanceof X402UpstreamError) {
+          skipped.push(`${rule.tool_id} (x402 upstream blocked)`);
+        } else {
+          skipped.push(rule.tool_id);
+        }
       }
     }
 
