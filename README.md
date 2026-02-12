@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="rerquest-tap-logo-transparent.png" alt="RequestTap Router" width="400" />
+  <img src="rerquest-tap-logo-transparent.png" alt="RequestTap Router" width="700" />
 </p>
 
 # RequestTap Router
