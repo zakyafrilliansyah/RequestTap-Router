@@ -33,15 +33,16 @@ export function generateAgentApiDocs(
   }
 
   // Check if any routes are ungrouped
-  const hasUngrouped = routes.some((r) => !toolGroupMap.has(r.tool_id));
+  const hasUngrouped = routes.some((r) => !r.restricted && !toolGroupMap.has(r.tool_id));
   if (hasUngrouped) {
     tags.push({ name: "Ungrouped", description: "Routes not assigned to a group" });
   }
 
-  // Build paths
+  // Build paths (exclude restricted routes)
   const paths: Record<string, Record<string, object>> = {};
+  const allowedRoutes = routes.filter((r) => !r.restricted);
 
-  for (const route of routes) {
+  for (const route of allowedRoutes) {
     const group = toolGroupMap.get(route.tool_id);
     const tagName = group ? group.name : "Ungrouped";
     const price = group?.priceUsdc || route.price_usdc;

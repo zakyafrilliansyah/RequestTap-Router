@@ -345,6 +345,48 @@ export function createAdminRouter(deps: AdminRouterDeps): Router {
     res.json(spec);
   });
 
+  // GET /admin/blacklist
+  router.get("/blacklist", (_req, res) => {
+    const dashConfig = configStore.load();
+    res.json({ blacklist: dashConfig.blacklist || [] });
+  });
+
+  // POST /admin/blacklist
+  router.post("/blacklist", (req, res) => {
+    const { address } = req.body;
+    if (!address || typeof address !== "string") {
+      res.status(400).json({ error: "address is required (string)" });
+      return;
+    }
+    const current = configStore.load();
+    const list: string[] = current.blacklist || [];
+    const normalized = address.toLowerCase();
+    if (!list.includes(normalized)) list.push(normalized);
+    current.blacklist = list;
+    try {
+      configStore.save(current);
+    } catch (err: any) {
+      res.status(500).json({ error: `Failed to save: ${err.message}` });
+      return;
+    }
+    res.json({ ok: true, blacklist: list });
+  });
+
+  // DELETE /admin/blacklist/:address
+  router.delete("/blacklist/:address", (req, res) => {
+    const current = configStore.load();
+    const normalized = req.params.address.toLowerCase();
+    const list = (current.blacklist || []).filter((a: string) => a !== normalized);
+    current.blacklist = list;
+    try {
+      configStore.save(current);
+    } catch (err: any) {
+      res.status(500).json({ error: `Failed to save: ${err.message}` });
+      return;
+    }
+    res.json({ ok: true, blacklist: list });
+  });
+
   return router;
 }
 

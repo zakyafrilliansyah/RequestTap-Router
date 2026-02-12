@@ -1,0 +1,12 @@
+$env:RT_ADMIN_KEY = "rt-admin-dev-key"
+$env:RT_PORT = "4402"
+$env:RT_FACILITATOR_URL = "https://www.x402.org"
+$env:RT_PAY_TO_ADDRESS = "0x1234567890abcdef1234567890abcdef12345678"
+$env:RT_BASE_NETWORK = "base-sepolia"
+$env:RT_ROUTES_FILE = "routes.json"
+$env:SKALE_RPC_URL = "https://testnet.skalenodes.com/v1/giant-half-dual-testnet"
+$env:SKALE_CHAIN_ID = "974399131"
+$env:SKALE_BITE_CONTRACT = "0x64687C88C767D9a504c392C07393980af2879dC1"
+$env:SKALE_PRIVATE_KEY = "0x3afd79bdc96502dbb2bb903a7da63f1c1a988b9666d35f65836c99e1ae231d87"
+Set-Location "C:\websites\RequestTap\RequestTap-Router"
+node packages/gateway/dist/index.js

@@ -17,6 +17,7 @@ export interface RouteRule {
   price_usdc: string;
   group?: string;
   description?: string;
+  restricted?: boolean;
 }
 
 export interface CompiledRule {

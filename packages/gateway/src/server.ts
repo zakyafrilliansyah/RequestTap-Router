@@ -17,6 +17,7 @@ import { hashBytes } from "./hash.js";
 import { logger } from "./utils/logger.js";
 import { createAdminRouter } from "./admin-routes.js";
 import { ConfigStore } from "./services/config-store.js";
+import { generateAgentApiDocs } from "./services/docs-generator.js";
 import { Outcome, ReasonCode, type Receipt, HEADERS } from "@requesttap/shared";
 
 // Headers that must not be forwarded to upstream
@@ -74,13 +75,42 @@ export function createApp({ config, routes }: CreateAppOptions) {
   const configFilePath = routesFile.replace(/\.json$/, "") + ".rt-config.json";
   const configStore = new ConfigStore(configFilePath.startsWith(".") ? "./rt-config.json" : configFilePath);
 
-  // Apply persisted config on startup
+  // Apply persisted config on startup, seeding from env vars if not set
   const persistedConfig = configStore.load();
   if (persistedConfig.payToAddress) {
     (config as any).payToAddress = persistedConfig.payToAddress;
   }
   if (persistedConfig.baseNetwork) {
     (config as any).baseNetwork = persistedConfig.baseNetwork;
+  }
+  // Seed dashboard config from env vars if fields are empty
+  let needsSave = false;
+  if (!persistedConfig.payToAddress && config.payToAddress) {
+    persistedConfig.payToAddress = config.payToAddress;
+    needsSave = true;
+  }
+  if (!persistedConfig.baseNetwork && config.baseNetwork) {
+    persistedConfig.baseNetwork = config.baseNetwork;
+    needsSave = true;
+  }
+  if (!persistedConfig.skaleRpcUrl && config.skaleRpcUrl) {
+    persistedConfig.skaleRpcUrl = config.skaleRpcUrl;
+    needsSave = true;
+  }
+  if (!persistedConfig.skaleBiteContract && config.skaleBiteContract) {
+    persistedConfig.skaleBiteContract = config.skaleBiteContract;
+    needsSave = true;
+  }
+  if (config.skaleChainId) {
+    const networkLabel = config.skaleChainId === 974399131 ? "calypso-testnet"
+      : config.skaleChainId === 1351057110 ? "staging-v3" : "mainnet";
+    if (!persistedConfig.skaleNetwork || persistedConfig.skaleNetwork !== networkLabel) {
+      persistedConfig.skaleNetwork = networkLabel;
+      needsSave = true;
+    }
+  }
+  if (needsSave) {
+    try { configStore.save(persistedConfig); } catch {}
   }
 
   // Mutable route manager
@@ -107,14 +137,63 @@ export function createApp({ config, routes }: CreateAppOptions) {
     res.json({ status: "ok" });
   });
 
+  // Public API docs endpoint
+  app.get("/docs", (_req, res) => {
+    const dashConfig = configStore.load();
+    const spec = generateAgentApiDocs(
+      routeManager.getRoutes(),
+      dashConfig.routeGroups || [],
+      {
+        title: "RequestTap API",
+        description: "AI Agent API powered by RequestTap x402 Payment Gateway",
+        baseUrl: `${_req.protocol}://${_req.get("host") || "localhost:" + config.port}`,
+        payToAddress: dashConfig.payToAddress || config.payToAddress,
+      },
+    );
+    res.json(spec);
+  });
+
   // Admin API
   app.use("/admin", createAdminRouter({ routeManager, receiptStore, spendTracker, config, configStore, startTime }));
 
   // Gateway routes - catch all non-health requests
-  app.use("/api/*", async (req, res) => {
+  // NOTE: must use app.all (not app.use) so req.path retains the full path
+  app.all("/api/*", async (req, res) => {
     const requestId = uuidv4();
     (req as any).requestId = requestId;
     const startTime = performance.now();
+
+    // 0. API key verification (if configured)
+    const dashConfig = configStore.load();
+    if (dashConfig.apiKey) {
+      const authHeader = req.headers["authorization"] || "";
+      const xApiKey = req.headers["x-api-key"] || "";
+      const provided = authHeader.replace(/^Bearer\s+/i, "") || xApiKey;
+      if (provided !== dashConfig.apiKey) {
+        res.status(401).json({
+          request_id: requestId,
+          outcome: Outcome.DENIED,
+          reason_code: ReasonCode.UNAUTHORIZED,
+          explanation: "Invalid or missing API key. Provide via Authorization: Bearer <key> or X-Api-Key header.",
+        });
+        return;
+      }
+    }
+
+    // 0.5 Agent blacklist check
+    const agentAddress = (req.headers["x-agent-address"] as string) || "";
+    if (agentAddress) {
+      const blacklist: string[] = dashConfig.blacklist || [];
+      if (blacklist.includes(agentAddress.toLowerCase())) {
+        res.status(403).json({
+          request_id: requestId,
+          outcome: Outcome.DENIED,
+          reason_code: ReasonCode.AGENT_BLOCKED,
+          explanation: `Agent ${agentAddress} is blacklisted`,
+        });
+        return;
+      }
+    }
 
     // 1. Route matching
     let matchResult;

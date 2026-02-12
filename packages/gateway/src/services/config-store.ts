@@ -15,17 +15,23 @@ export interface DashboardConfig {
   baseNetwork: string;
   skaleNetwork: string;
   skaleRpcUrl: string;
+  skaleBiteContract: string;
   globalPriceUsdc: string | null;
+  apiKey: string;
   routeGroups: RouteGroup[];
+  blacklist: string[];
 }
 
 const DEFAULT_CONFIG: DashboardConfig = {
   payToAddress: "",
   baseNetwork: "base-sepolia",
-  skaleNetwork: "staging-v3",
+  skaleNetwork: "calypso-testnet",
   skaleRpcUrl: "",
+  skaleBiteContract: "",
   globalPriceUsdc: null,
+  apiKey: "",
   routeGroups: [],
+  blacklist: [],
 };
 
 export class ConfigStore {
