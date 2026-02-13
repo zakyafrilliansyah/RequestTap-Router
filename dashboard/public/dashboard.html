@@ -1033,7 +1033,7 @@
 
       <div class="debug-section collapsed" data-section="skale">
         <div class="debug-section-header" onclick="toggleSection(this)">
-          <h3 class="debug-section-title">SKALE <span class="debug-section-status" id="ss-skale"></span></h3>
+          <h3 class="debug-section-title">SKALE / BITE <span class="debug-section-status" id="ss-skale"></span></h3>
           <div style="display:flex;gap:6px;align-items:center">
             <button class="btn btn-sm" onclick="event.stopPropagation();runSection('skale')">Run Section</button>
 
@@ -1048,6 +1048,11 @@
           <div class="debug-card" id="debug-skale-block">
             <div class="debug-card-header"><span class="debug-card-title">Latest Block</span><button class="btn btn-sm" onclick="testSkaleBlock()">Run</button></div>
             <div class="debug-card-desc">eth_blockNumber via /rpc-proxy &mdash; returns block number</div>
+            <div class="debug-result"></div>
+          </div>
+          <div class="debug-card" id="debug-bite-committee">
+            <div class="debug-card-header"><span class="debug-card-title">BITE Committee</span><button class="btn btn-sm" onclick="testBiteCommittee()">Run</button></div>
+            <div class="debug-card-desc">bite_getCommitteesInfo &mdash; verify threshold encryption is available</div>
             <div class="debug-result"></div>
           </div>
         </div>
@@ -2135,7 +2140,7 @@ const debugSections = {
   receipts:   ()     => [[testReceiptsStats, testReceiptsList, testReceiptsFilter]],
   admin:      ()     => [[testAdminConfig, testDashboardConfigTest, testAdminRoutes]],
   docs:       ()     => [testOpenApiSpec],
-  skale:      (r, c) => [[() => testSkaleRpc(c), () => testSkaleBlock(c)]],
+  skale:      (r, c) => [[() => testSkaleRpc(c), () => testSkaleBlock(c), () => testBiteCommittee(c)]],
   cdp:        ()     => [[testCdpEnv, testCdpApi]],
 };
 
@@ -2503,6 +2508,29 @@ async function testSkaleBlock(cfg) {
       setTestResult('skale-block', 'pass', { blockNumber: parseInt(d.result, 16), raw: d.result });
     } else { setTestResult('skale-block', 'fail', d); }
   } catch (e) { setTestResult('skale-block', 'fail', { error: e.message }); }
+}
+
+async function testBiteCommittee(cfg) {
+  if (!cfg) { try { const r = await api('/admin/dashboard-config'); if (r.ok) cfg = await r.json(); } catch {} }
+  setTestRunning('bite-committee');
+  if (!cfg?.skaleRpcUrl) { setTestResult('bite-committee', 'skip', 'No SKALE RPC URL configured'); return; }
+  try {
+    const r = await fetch('/rpc-proxy', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rpcUrl: cfg.skaleRpcUrl, body: { jsonrpc: '2.0', method: 'bite_getCommitteesInfo', params: [], id: 1 } }),
+    });
+    const d = await r.json();
+    if (d.error) {
+      setTestResult('bite-committee', 'skip', 'BITE not enabled on this chain (' + (d.error.message || d.error) + ')');
+    } else if (Array.isArray(d.result) && d.result.length > 0 && d.result[0].commonBLSPublicKey) {
+      const committees = d.result.length;
+      const epochId = d.result[0].epochId;
+      const keyPreview = d.result[0].commonBLSPublicKey.slice(0, 16) + '...';
+      setTestResult('bite-committee', 'pass', { committees, epochId, blsKeyPreview: keyPreview, rotating: committees > 1 });
+    } else {
+      setTestResult('bite-committee', 'fail', d);
+    }
+  } catch (e) { setTestResult('bite-committee', 'fail', { error: e.message }); }
 }
 
 async function testX402Probe() {
