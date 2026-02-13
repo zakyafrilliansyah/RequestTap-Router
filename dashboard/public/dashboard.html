@@ -2152,13 +2152,11 @@ async function runSection(key) {
 }
 
 // Batch plan for runAllTests: groups of sections that can run in parallel.
-// Batch 1: independent read-only sections
-// Batch 2: sections that create/delete temp routes (e2e, x402, blacklist)
-// Batch 3: remaining write-then-read sections
+// Batch 1: slowest sections first (e2e creates routes + probes, core has 6 tests) + fast read-only
+// Batch 2: remaining route-creating sections
 const sectionBatches = [
-  ['core', 'admin', 'receipts', 'docs', 'skale', 'cdp'],
-  ['e2e', 'idempotency', 'payment', 'mandate'],
-  ['x402', 'blacklist'],
+  ['e2e', 'core', 'admin', 'receipts', 'docs', 'skale', 'cdp'],
+  ['idempotency', 'payment', 'mandate', 'x402', 'blacklist'],
 ];
 
 async function runAllTests() {
