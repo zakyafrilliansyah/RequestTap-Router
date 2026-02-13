@@ -36,6 +36,16 @@ const biteIntentStoreAbi = [
     outputs: [],
   },
   {
+    name: "onDecrypt",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "intentId", type: "bytes32" },
+      { name: "plaintext", type: "bytes" },
+    ],
+    outputs: [],
+  },
+  {
     name: "getIntent",
     type: "function",
     stateMutability: "view",
@@ -87,6 +97,29 @@ export function createBiteService(config: GatewayConfig): BiteService | null {
 
   const bite = new BITE(rpcUrl);
 
+  // Cache plaintext per intentId so triggerReveal can call onDecrypt.
+  // The BITE protocol should call onDecrypt automatically, but on testnets
+  // the callback may not be wired up, so we call it ourselves after markPaid.
+  const plaintextCache = new Map<string, Hex>();
+
+  // Serialize all write transactions and manage nonces locally to prevent
+  // nonce collisions when concurrent requests hit the same wallet.
+  let txQueue: Promise<void> = Promise.resolve();
+  let localNonce: number | null = null;
+
+  async function nextNonce(): Promise<number> {
+    if (localNonce !== null) return localNonce++;
+    const n = await publicClient.getTransactionCount({ address: account.address });
+    localNonce = n + 1;
+    return n;
+  }
+
+  function enqueue<T>(fn: () => Promise<T>): Promise<T> {
+    const result = txQueue.then(fn, fn);
+    txQueue = result.then(() => {}, () => {});
+    return result;
+  }
+
   logger.info("SKALE BITE service initialized", {
     rpcUrl,
     contract: contractAddress,
@@ -97,40 +130,74 @@ export function createBiteService(config: GatewayConfig): BiteService | null {
       intentId: string,
       data: Uint8Array,
     ): Promise<string> {
-      logger.debug("Encrypting intent", { intentId, size: data.length });
+      return enqueue(async () => {
+        logger.debug("Encrypting intent", { intentId, size: data.length });
 
-      const calldata = encodeFunctionData({
-        abi: biteIntentStoreAbi,
-        functionName: "storeIntent",
-        args: [intentId as Hex, `0x${Buffer.from(data).toString("hex")}` as Hex],
+        const dataHex = `0x${Buffer.from(data).toString("hex")}` as Hex;
+        plaintextCache.set(intentId, dataHex);
+
+        const calldata = encodeFunctionData({
+          abi: biteIntentStoreAbi,
+          functionName: "storeIntent",
+          args: [intentId as Hex, dataHex],
+        });
+
+        const encryptedTx = await bite.encryptTransaction({
+          to: contractAddress,
+          data: calldata,
+        });
+
+        const nonce = await nextNonce();
+        const txHash = await walletClient.sendTransaction({
+          to: encryptedTx.to as Address,
+          data: encryptedTx.data as Hex,
+          gas: encryptedTx.gasLimit ? BigInt(encryptedTx.gasLimit) : 300000n,
+          nonce,
+        });
+
+        // Wait for tx confirmation so BITE decryption + contract execution completes
+        await publicClient.waitForTransactionReceipt({ hash: txHash });
+
+        logger.debug("Encrypted intent stored", { intentId, txHash });
+        return txHash;
       });
-
-      const encryptedTx = await bite.encryptTransaction({
-        to: contractAddress,
-        data: calldata,
-      });
-
-      const txHash = await walletClient.sendTransaction({
-        to: encryptedTx.to as Address,
-        data: encryptedTx.data as Hex,
-        gas: encryptedTx.gasLimit ? BigInt(encryptedTx.gasLimit) : 300000n,
-      });
-
-      logger.debug("Encrypted intent stored", { intentId, txHash });
-      return txHash;
     },
 
     async triggerReveal(intentId: string): Promise<void> {
-      logger.debug("Triggering BITE reveal", { intentId });
+      return enqueue(async () => {
+        logger.debug("Triggering BITE reveal", { intentId });
 
-      const txHash = await walletClient.writeContract({
-        address: contractAddress,
-        abi: biteIntentStoreAbi,
-        functionName: "markPaid",
-        args: [intentId as Hex],
+        // Step 1: markPaid
+        const nonce1 = await nextNonce();
+        const paidHash = await walletClient.writeContract({
+          address: contractAddress,
+          abi: biteIntentStoreAbi,
+          functionName: "markPaid",
+          args: [intentId as Hex],
+          nonce: nonce1,
+        });
+        await publicClient.waitForTransactionReceipt({ hash: paidHash });
+        logger.debug("markPaid confirmed", { intentId, txHash: paidHash });
+
+        // Step 2: Call onDecrypt with cached plaintext.
+        // On production SKALE chains the BITE protocol calls this automatically;
+        // we call it ourselves as a fallback for testnets where the callback
+        // is not wired up.
+        const plaintext = plaintextCache.get(intentId);
+        if (plaintext) {
+          const nonce2 = await nextNonce();
+          const revealHash = await walletClient.writeContract({
+            address: contractAddress,
+            abi: biteIntentStoreAbi,
+            functionName: "onDecrypt",
+            args: [intentId as Hex, plaintext],
+            nonce: nonce2,
+          });
+          await publicClient.waitForTransactionReceipt({ hash: revealHash });
+          plaintextCache.delete(intentId);
+          logger.debug("onDecrypt confirmed", { intentId, txHash: revealHash });
+        }
       });
-
-      logger.debug("markPaid tx sent", { intentId, txHash });
     },
 
     async getDecryptedIntent(

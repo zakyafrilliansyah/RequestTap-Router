@@ -21,6 +21,7 @@ Open Source x402 API Router. Instantly turn any API into a USDC pay-per-request 
 - [Architecture](#architecture)
 - [Quick Start](#quick-start)
 - [Configuration](#configuration)
+- [BITE Encryption](#bite-encryption-skale)
 - [API Endpoints](#api-endpoints)
 - [Agent Guide](#agent-guide)
 - [Claude Code Commands](#claude-code-commands)
@@ -68,7 +69,7 @@ AI Agent  ──>  Agent SDK  ──>  Gateway  ──>  Upstream API
                   └── Receipts (SUCCESS / DENIED / ERROR)
 
 Payments: x402 Protocol → Coinbase CDP → Base L2 (USDC)
-Encryption: SKALE BITE → Calypso Hub → Threshold Encryption
+Encryption: SKALE BITE → SKALE V4 Consensus → Threshold Encryption
 Signing: viem → EIP-191 Personal Sign → EIP-155 Chain IDs
 Contracts: Solidity → Hardhat → SKALE Deployment
 ```
@@ -165,6 +166,31 @@ Set environment variables or create a `.env` file (see `.env.example`):
 | `SKALE_CHAIN_ID` | no | — | SKALE chain ID |
 | `SKALE_BITE_CONTRACT` | no | — | BITE contract address |
 | `SKALE_PRIVATE_KEY` | no | — | SKALE signing key |
+
+## BITE Encryption (SKALE)
+
+Optional threshold encryption for payment intents using [SKALE BITE](https://docs.skale.space/get-started/quick-start/skale-on-base) (Blockchain Integrated Threshold Encryption). When enabled, premium request data is encrypted before consensus and only revealed after payment confirmation.
+
+**How it works:**
+1. Gateway encrypts calldata via `@skalenetwork/bite` (`BITE.encryptTransaction()`)
+2. Encrypted intent is stored on-chain (`storeIntent`)
+3. After x402 payment confirms, `markPaid` triggers the threshold decryption reveal
+4. Decrypted data is read back via `getIntent`
+
+**Configuration:** Set all four `SKALE_*` env vars to enable. The official SKALE Base Sepolia testnet RPC is:
+```
+SKALE_RPC_URL=https://base-sepolia-testnet.skalenodes.com/v1/jubilant-horrible-ancha
+SKALE_CHAIN_ID=324705682
+SKALE_BITE_CONTRACT=<your deployed BiteIntentStore address>
+SKALE_PRIVATE_KEY=<private key with sFUEL for gas>
+```
+
+**Admin endpoints** (when BITE is enabled):
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/admin/skale/test-anchor` | Test SKALE connectivity |
+| `GET` | `/admin/skale/intent/:id` | Read intent state |
+| `POST` | `/admin/skale/reveal/:id` | Manually trigger reveal |
 
 ## API Endpoints
 

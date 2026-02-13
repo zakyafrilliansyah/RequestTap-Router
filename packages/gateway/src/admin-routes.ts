@@ -402,6 +402,7 @@ export function createAdminRouter(deps: AdminRouterDeps): Router {
       const txHash = await biteService.encryptIntent(intentId, testPayload);
       res.json({ ok: true, txHash, intentId });
     } catch (err: any) {
+      console.error("[SKALE] anchor failed:", err.message);
       res.status(500).json({ error: `SKALE anchor failed: ${err.message}` });
     }
   });
