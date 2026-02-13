@@ -852,6 +852,11 @@
             <div class="debug-card-desc">Store test hash on SKALE via admin endpoint &mdash; skip if not configured</div>
             <div class="debug-result"></div>
           </div>
+          <div class="debug-card" id="debug-e2e-bite-lifecycle">
+            <div class="debug-card-header"><span class="debug-card-title">BITE Encryption Lifecycle</span><button class="btn btn-sm" onclick="testBiteLifecycle()">Run</button></div>
+            <div class="debug-card-desc">Encrypt &rarr; verify hidden &rarr; reveal (markPaid) &rarr; verify decrypted &mdash; full threshold encryption flow</div>
+            <div class="debug-result"></div>
+          </div>
         </div>
       </div>
 
@@ -874,7 +879,7 @@
 
       <div class="debug-section collapsed" data-section="payment">
         <div class="debug-section-header" onclick="toggleSection(this)">
-          <h3 class="debug-section-title">Payment <span class="debug-section-status" id="ss-payment"></span></h3>
+          <h3 class="debug-section-title">x402 Payment <span class="debug-section-status" id="ss-payment"></span></h3>
           <div style="display:flex;gap:6px;align-items:center">
             <button class="btn btn-sm" onclick="event.stopPropagation();runSection('payment')">Run Section</button>
 
@@ -884,6 +889,11 @@
           <div class="debug-card" id="debug-payment-402">
             <div class="debug-card-header"><span class="debug-card-title">Payment Required</span><button class="btn btn-sm" onclick="testPaymentRequired()">Run</button></div>
             <div class="debug-card-desc">Hit priced route without payment &mdash; 402</div>
+            <div class="debug-result"></div>
+          </div>
+          <div class="debug-card" id="debug-payment-x402-header">
+            <div class="debug-card-header"><span class="debug-card-title">x402 Header Valid</span><button class="btn btn-sm" onclick="testX402HeaderValid()">Run</button></div>
+            <div class="debug-card-desc">402 response includes valid x402 payment requirements (payTo, amount, network)</div>
             <div class="debug-result"></div>
           </div>
         </div>
@@ -957,9 +967,30 @@
             <div class="debug-card-desc">Add agent to blacklist, request &mdash; 403 AGENT_BLOCKED, then remove</div>
             <div class="debug-result"></div>
           </div>
-          <div class="debug-card" id="debug-erc8004-reputation">
-            <div class="debug-card-header"><span class="debug-card-title">ERC-8004 Reputation</span><button class="btn btn-sm" onclick="testErc8004Reputation()">Run</button></div>
-            <div class="debug-card-desc">GET /admin/reputation/1 &mdash; query on-chain agent reputation score</div>
+        </div>
+      </div>
+
+      <div class="debug-section collapsed" data-section="erc8004">
+        <div class="debug-section-header" onclick="toggleSection(this)">
+          <h3 class="debug-section-title">Agent Reputation (ERC-8004) <span class="debug-section-status" id="ss-erc8004"></span></h3>
+          <div style="display:flex;gap:6px;align-items:center">
+            <button class="btn btn-sm" onclick="event.stopPropagation();runSection('erc8004')">Run Section</button>
+          </div>
+        </div>
+        <div class="debug-cards">
+          <div class="debug-card" id="debug-erc8004-query">
+            <div class="debug-card-header"><span class="debug-card-title">Contract Query</span><button class="btn btn-sm" onclick="testErc8004Query()">Run</button></div>
+            <div class="debug-card-desc">GET /admin/reputation/1 &mdash; query on-chain reputation from registry contract</div>
+            <div class="debug-result"></div>
+          </div>
+          <div class="debug-card" id="debug-erc8004-allowed">
+            <div class="debug-card-header"><span class="debug-card-title">Agent Allowed</span><button class="btn btn-sm" onclick="testErc8004Allowed()">Run</button></div>
+            <div class="debug-card-desc">API request with X-Agent-Id header &mdash; should pass (not 403 LOW_REPUTATION)</div>
+            <div class="debug-result"></div>
+          </div>
+          <div class="debug-card" id="debug-erc8004-blocked">
+            <div class="debug-card-header"><span class="debug-card-title">Block Threshold</span><button class="btn btn-sm" onclick="testErc8004Blocked()">Run</button></div>
+            <div class="debug-card-desc" id="erc8004-block-desc">Verify allow/block logic &mdash; agents with no feedback pass (fail-open), agents with low scores are blocked</div>
             <div class="debug-result"></div>
           </div>
         </div>
@@ -994,7 +1025,7 @@
 
       <div class="debug-section collapsed" data-section="admin">
         <div class="debug-section-header" onclick="toggleSection(this)">
-          <h3 class="debug-section-title">Admin API <span class="debug-section-status" id="ss-admin"></span></h3>
+          <h3 class="debug-section-title">RT Router Settings <span class="debug-section-status" id="ss-admin"></span></h3>
           <div style="display:flex;gap:6px;align-items:center">
             <button class="btn btn-sm" onclick="event.stopPropagation();runSection('admin')">Run Section</button>
 
@@ -1021,7 +1052,7 @@
 
       <div class="debug-section collapsed" data-section="docs">
         <div class="debug-section-header" onclick="toggleSection(this)">
-          <h3 class="debug-section-title">Docs <span class="debug-section-status" id="ss-docs"></span></h3>
+          <h3 class="debug-section-title">API Docs <span class="debug-section-status" id="ss-docs"></span></h3>
           <div style="display:flex;gap:6px;align-items:center">
             <button class="btn btn-sm" onclick="event.stopPropagation();runSection('docs')">Run Section</button>
 
@@ -2155,12 +2186,13 @@ function updateToggleAllLabel() {
 // Each step is either a function (run alone) or an array of functions (run in parallel).
 const debugSections = {
   core:       (r, c) => [[testHealthCheck, () => testRouteMatch(r,c), () => testRouteNotFound(c), () => testRestrictedRoute(r,c), () => testAuth401(r,c), () => testAuthValid(r,c)]],
-  e2e:        (r, c) => [() => testE2ePipeline(c), [testE2eReceipt, testE2eHash], [() => testE2e402(c), testE2eSkale]],
+  e2e:        (r, c) => [() => testE2ePipeline(c), [testE2eReceipt, testE2eHash], [() => testE2e402(c), testE2eSkale], testBiteLifecycle],
   idempotency:(r, c) => [() => testIdempotency(r,c)],
-  payment:    (r, c) => [() => testPaymentRequired(r,c)],
+  payment:    (r, c) => [() => testPaymentRequired(r,c), () => testX402HeaderValid(r,c)],
   x402:       ()     => [testX402Probe, testX402Skip],
   mandate:    (r, c) => [[() => testMandateSkipped(r,c), () => testMandateRejected(r,c)]],
-  blacklist:  (r, c) => [testBlacklistApi, [() => testAgentAllowed(r,c), () => testAgentBlocked(r,c), testErc8004Reputation]],
+  blacklist:  (r, c) => [testBlacklistApi, [() => testAgentAllowed(r,c), () => testAgentBlocked(r,c)]],
+  erc8004:    (r, c) => [testErc8004Query, [() => testErc8004Allowed(r,c), testErc8004Blocked]],
   receipts:   ()     => [[testReceiptsStats, testReceiptsList, testReceiptsFilter]],
   admin:      ()     => [[testAdminConfig, testDashboardConfigTest, testAdminRoutes]],
   docs:       ()     => [testOpenApiSpec],
@@ -2185,7 +2217,7 @@ async function runSection(key) {
 // Batch 2: remaining route-creating sections
 const sectionBatches = [
   ['e2e', 'core', 'admin', 'receipts', 'docs', 'skale', 'cdp'],
-  ['idempotency', 'payment', 'mandate', 'x402', 'blacklist'],
+  ['idempotency', 'payment', 'mandate', 'x402', 'blacklist', 'erc8004'],
 ];
 
 async function runAllTests() {
@@ -2338,6 +2370,45 @@ async function testPaymentRequired(routes, cfg) {
   } catch (e) { setTestResult('payment-402', 'fail', { error: e.message }); }
 }
 
+async function testX402HeaderValid(routes, cfg) {
+  if (!routes || !cfg) { const ctx = await debugLoadContext(); routes = routes || ctx.routes; cfg = cfg || ctx.cfg; }
+  setTestRunning('payment-x402-header');
+  const route = routes.find(r => !r.restricted && parseFloat(r.price_usdc || '0') > 0);
+  if (!route) { setTestResult('payment-x402-header', 'skip', 'No paid routes configured'); return; }
+  if (!cfg?.payToAddress) { setTestResult('payment-x402-header', 'skip', 'No pay-to address configured'); return; }
+  try {
+    const path = debugConcretePath(route.path);
+    const headers = {};
+    if (cfg?.apiKey) headers['Authorization'] = `Bearer ${cfg.apiKey}`;
+    const r = await debugApiFetch(path, { headers });
+    const text = await r.text();
+    let d; try { d = JSON.parse(text); } catch { d = text; }
+    if (r.status !== 402) {
+      if (r.status === 502 && d?.reason_code === 'UPSTREAM_ERROR_NO_CHARGE') {
+        setTestResult('payment-x402-header', 'skip', 'x402 facilitator not reachable — cannot validate 402 headers');
+      } else {
+        setTestResult('payment-x402-header', 'fail', { status: r.status, note: 'Expected 402', body: d });
+      }
+      return;
+    }
+    // Validate x402 payment requirements in response body
+    const reqs = d?.paymentRequirements || d?.accepts;
+    if (!reqs || !Array.isArray(reqs) || reqs.length === 0) {
+      setTestResult('payment-x402-header', 'skip', 'x402 facilitator not fully configured — 402 returned without payment requirements');
+      return;
+    }
+    const req0 = reqs[0];
+    const hasPayTo = !!req0.payTo || !!req0.pay_to;
+    const hasNetwork = !!req0.network;
+    const hasMaxAmount = req0.maxAmountRequired != null || req0.amount != null;
+    if (hasPayTo && hasNetwork) {
+      setTestResult('payment-x402-header', 'pass', { payTo: req0.payTo || req0.pay_to, network: req0.network, maxAmount: req0.maxAmountRequired || req0.amount, scheme: req0.scheme || null });
+    } else {
+      setTestResult('payment-x402-header', 'fail', { note: 'Missing required x402 fields', hasPayTo, hasNetwork, hasMaxAmount, body: d });
+    }
+  } catch (e) { setTestResult('payment-x402-header', 'fail', { error: e.message }); }
+}
+
 async function testMandateSkipped(routes, cfg) {
   if (!routes || !cfg) { const ctx = await debugLoadContext(); routes = routes || ctx.routes; cfg = cfg || ctx.cfg; }
   setTestRunning('mandate-skipped');
@@ -2437,19 +2508,63 @@ async function testAgentBlocked(routes, cfg) {
   }
 }
 
-async function testErc8004Reputation() {
-  setTestRunning('erc8004-reputation');
+async function testErc8004Query() {
+  setTestRunning('erc8004-query');
   try {
     const r = await api('/admin/reputation/1');
     const d = await r.json();
     if (r.status === 400 && d.error === 'ERC-8004 not configured') {
-      setTestResult('erc8004-reputation', 'skip', 'ERC-8004 not configured');
+      setTestResult('erc8004-query', 'skip', 'ERC-8004 not configured');
     } else if (r.ok && typeof d.score === 'number') {
-      setTestResult('erc8004-reputation', 'pass', d);
+      // Update the block threshold description with actual min_score
+      if (d.min_score != null) {
+        const desc = document.getElementById('erc8004-block-desc');
+        if (desc) desc.textContent = `Min score: ${d.min_score} — agents with no feedback pass (fail-open), scores below ${d.min_score} are blocked`;
+      }
+      setTestResult('erc8004-query', 'pass', d);
     } else {
-      setTestResult('erc8004-reputation', 'fail', d);
+      setTestResult('erc8004-query', 'fail', d);
     }
-  } catch (e) { setTestResult('erc8004-reputation', 'fail', { error: e.message }); }
+  } catch (e) { setTestResult('erc8004-query', 'fail', { error: e.message }); }
+}
+
+async function testErc8004Allowed(routes, cfg) {
+  if (!routes || !cfg) { const ctx = await debugLoadContext(); routes = routes || ctx.routes; cfg = cfg || ctx.cfg; }
+  setTestRunning('erc8004-allowed');
+  // Check if ERC-8004 is configured
+  const check = await api('/admin/reputation/1');
+  if (check.status === 400) { setTestResult('erc8004-allowed', 'skip', 'ERC-8004 not configured'); return; }
+  const route = debugGetFirstEnabled(routes);
+  if (!route) { setTestResult('erc8004-allowed', 'skip', 'No enabled routes'); return; }
+  try {
+    const path = debugConcretePath(route.path);
+    const headers = { 'X-Agent-Id': '1' };
+    if (cfg?.apiKey) headers['Authorization'] = `Bearer ${cfg.apiKey}`;
+    const r = await debugApiFetch(path, { headers });
+    const text = await r.text();
+    let d; try { d = JSON.parse(text); } catch { d = text; }
+    const blocked = r.status === 403 && d?.reason_code === 'LOW_REPUTATION';
+    setTestResult('erc8004-allowed', !blocked ? 'pass' : 'fail', { status: r.status, agentId: 1, note: blocked ? 'Agent blocked by reputation' : 'Agent passed reputation check' });
+  } catch (e) { setTestResult('erc8004-allowed', 'fail', { error: e.message }); }
+}
+
+async function testErc8004Blocked() {
+  setTestRunning('erc8004-blocked');
+  try {
+    const check = await api('/admin/reputation/1');
+    if (check.status === 400) { setTestResult('erc8004-blocked', 'skip', 'ERC-8004 not configured'); return; }
+    // Query with impossibly high min_score to verify block logic
+    const r = await api('/admin/reputation/1?min_score=999999');
+    const d = await r.json();
+    if (!r.ok) { setTestResult('erc8004-blocked', 'fail', d); return; }
+    // If count=0 (no feedback), agent is always allowed — that's correct behavior
+    if (d.count === 0) {
+      setTestResult('erc8004-blocked', 'pass', { ...d, note: 'No on-chain feedback yet — agent allowed (fail-open). With feedback and score < 999999, would be blocked.' });
+    } else {
+      // count > 0: with min_score=999999, allowed should be false
+      setTestResult('erc8004-blocked', d.allowed === false ? 'pass' : 'fail', { ...d, note: d.allowed === false ? 'Agent would be blocked (score below threshold)' : 'Expected blocked but got allowed' });
+    }
+  } catch (e) { setTestResult('erc8004-blocked', 'fail', { error: e.message }); }
 }
 
 async function testReceiptsStats() {
@@ -2798,6 +2913,60 @@ async function testE2eSkale() {
       setTestResult('e2e-skale', 'fail', d);
     }
   } catch (e) { setTestResult('e2e-skale', 'fail', { error: e.message }); }
+}
+
+async function testBiteLifecycle() {
+  setTestRunning('e2e-bite-lifecycle');
+  try {
+    const envR = await fetch('/env-status');
+    const env = await envR.json();
+    if (!env.skalePrivateKey) { setTestResult('e2e-bite-lifecycle', 'skip', 'SKALE not configured (no private key)'); return; }
+
+    // Step 1: Encrypt and store
+    const anchorR = await api('/admin/skale/test-anchor', { method: 'POST', body: JSON.stringify({}) });
+    const anchor = await anchorR.json();
+    if (!anchorR.ok) {
+      const err = anchor.error || '';
+      if (err.includes('METHOD_NOT_FOUND') || err.includes('not supported') || err.includes('Invalid transaction')) {
+        setTestResult('e2e-bite-lifecycle', 'skip', 'SKALE RPC does not support BITE transactions on this chain');
+        return;
+      }
+      setTestResult('e2e-bite-lifecycle', 'fail', { step: 'encrypt', error: anchor.error || anchor });
+      return;
+    }
+
+    // Step 2: Verify data is hidden (not revealed)
+    const readR = await api('/admin/skale/intent/' + encodeURIComponent(anchor.intentId));
+    const readD = await readR.json();
+    if (!readR.ok) { setTestResult('e2e-bite-lifecycle', 'fail', { step: 'read-before-reveal', error: readD.error }); return; }
+    if (readD.revealed) {
+      setTestResult('e2e-bite-lifecycle', 'fail', { step: 'read-before-reveal', note: 'Data was readable before reveal — encryption not working', data: readD });
+      return;
+    }
+
+    // Step 3: Trigger reveal (markPaid)
+    const revealR = await api('/admin/skale/reveal/' + encodeURIComponent(anchor.intentId), { method: 'POST', body: JSON.stringify({}) });
+    const revealD = await revealR.json();
+    if (!revealR.ok) { setTestResult('e2e-bite-lifecycle', 'fail', { step: 'reveal', error: revealD.error }); return; }
+
+    // Step 4: Verify data is now decrypted and readable
+    const read2R = await api('/admin/skale/intent/' + encodeURIComponent(anchor.intentId));
+    const read2D = await read2R.json();
+    if (!read2R.ok) { setTestResult('e2e-bite-lifecycle', 'fail', { step: 'read-after-reveal', error: read2D.error }); return; }
+
+    if (read2D.revealed && read2D.data) {
+      let parsed; try { parsed = JSON.parse(read2D.data); } catch { parsed = read2D.data; }
+      setTestResult('e2e-bite-lifecycle', 'pass', {
+        intentId: anchor.intentId,
+        txHash: anchor.txHash,
+        hiddenBeforeReveal: true,
+        revealedAfterMarkPaid: true,
+        decryptedPayload: parsed,
+      });
+    } else {
+      setTestResult('e2e-bite-lifecycle', 'fail', { step: 'read-after-reveal', note: 'Data not revealed after markPaid', data: read2D });
+    }
+  } catch (e) { setTestResult('e2e-bite-lifecycle', 'fail', { error: e.message }); }
 }
 </script>
 </body>

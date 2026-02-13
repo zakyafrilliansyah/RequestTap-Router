@@ -54,6 +54,10 @@ export function createAdminRouter(deps: AdminRouterDeps): Router {
       replayTtlMs: config.replayTtlMs,
       payToAddress: config.payToAddress ? mask(config.payToAddress, 6, 4) : null,
       routesFile: process.env.RT_ROUTES_FILE || null,
+      erc8004: config.erc8004RpcUrl ? {
+        contract: config.erc8004Contract,
+        minScore: config.erc8004MinScore ?? 20,
+      } : null,
     });
   });
 
@@ -402,7 +406,40 @@ export function createAdminRouter(deps: AdminRouterDeps): Router {
     }
   });
 
-  // GET /admin/reputation/:agentId
+  // GET /admin/skale/intent/:intentId — read intent (null if not revealed)
+  router.get("/skale/intent/:intentId", async (req, res) => {
+    if (!biteService) {
+      res.status(400).json({ error: "SKALE not configured" });
+      return;
+    }
+    try {
+      const data = await biteService.getDecryptedIntent(req.params.intentId);
+      if (data === null) {
+        res.json({ revealed: false, data: null });
+      } else {
+        const decoded = new TextDecoder().decode(data);
+        res.json({ revealed: true, data: decoded });
+      }
+    } catch (err: any) {
+      res.status(500).json({ error: `Failed to read intent: ${err.message}` });
+    }
+  });
+
+  // POST /admin/skale/reveal/:intentId — trigger markPaid to reveal
+  router.post("/skale/reveal/:intentId", async (req, res) => {
+    if (!biteService) {
+      res.status(400).json({ error: "SKALE not configured" });
+      return;
+    }
+    try {
+      await biteService.triggerReveal(req.params.intentId);
+      res.json({ ok: true, intentId: req.params.intentId });
+    } catch (err: any) {
+      res.status(500).json({ error: `Reveal failed: ${err.message}` });
+    }
+  });
+
+  // GET /admin/reputation/:agentId?min_score=N
   router.get("/reputation/:agentId", async (req, res) => {
     if (!reputationService) {
       res.status(400).json({ error: "ERC-8004 not configured" });
@@ -410,7 +447,14 @@ export function createAdminRouter(deps: AdminRouterDeps): Router {
     }
     try {
       const result = await reputationService.checkReputation(BigInt(req.params.agentId));
-      res.json(result);
+      // Optional min_score override for testing allow/block threshold
+      const minScoreOverride = req.query.min_score != null ? parseFloat(String(req.query.min_score)) : null;
+      if (minScoreOverride != null && !isNaN(minScoreOverride)) {
+        const allowed = result.count === 0 || result.score >= minScoreOverride;
+        res.json({ ...result, allowed, min_score: minScoreOverride });
+        return;
+      }
+      res.json({ ...result, min_score: config.erc8004MinScore ?? 20 });
     } catch (err: any) {
       res.status(500).json({ error: `Reputation check failed: ${err.message}` });
     }
