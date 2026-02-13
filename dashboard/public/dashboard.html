@@ -1733,9 +1733,9 @@ async function loadDemoSettings() {
   document.getElementById('input-api-key').value = demoKey;
   document.getElementById('input-wallet-address').value = '0x1234567890abcdef1234567890abcdef12345678';
   document.getElementById('input-base-network').value = 'base-sepolia';
-  document.getElementById('input-skale-network').value = 'calypso-testnet';
-  document.getElementById('input-skale-rpc').value = 'https://testnet.skalenodes.com/v1/giant-half-dual-testnet';
-  document.getElementById('input-skale-contract').value = '0x591e3851E664fDAb611B14F766a285D28a9D51e2';
+  document.getElementById('input-skale-network').value = 'base-sepolia-testnet';
+  document.getElementById('input-skale-rpc').value = 'https://base-sepolia-testnet.skalenodes.com/v1/base-testnet';
+  document.getElementById('input-skale-contract').value = '0x64687C88C767D9a504c392C07393980af2879dC1';
   await saveDashboardConfig();
 
   await loadRoutes();

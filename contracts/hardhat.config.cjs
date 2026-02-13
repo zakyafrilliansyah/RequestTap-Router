@@ -18,6 +18,13 @@ const config = {
         ? [process.env.SKALE_PRIVATE_KEY]
         : [],
     },
+    skaleBaseSepolia: {
+      url: "https://base-sepolia-testnet.skalenodes.com/v1/base-testnet",
+      chainId: 324705682,
+      accounts: process.env.SKALE_PRIVATE_KEY
+        ? [process.env.SKALE_PRIVATE_KEY]
+        : [],
+    },
   },
 };
 
