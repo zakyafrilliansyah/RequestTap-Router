@@ -178,7 +178,14 @@ Optional threshold encryption for payment intents using [SKALE BITE](https://doc
 3. After x402 payment confirms, `markPaid` triggers the threshold decryption reveal
 4. Decrypted data is read back via `getIntent`
 
-**Configuration:** Set all four `SKALE_*` env vars to enable. The official SKALE Base Sepolia testnet RPC is:
+**Networks:**
+
+| Network | Chain ID | RPC | Gas Token | Notes |
+|---------|----------|-----|-----------|-------|
+| SKALE Base Sepolia (testnet) | `324705682` | `https://base-sepolia-testnet.skalenodes.com/v1/jubilant-horrible-ancha` | sFUEL (free) | Best for development |
+| SKALE Base (mainnet) | `1187947933` | `https://skale-base.skalenodes.com/v1/base` | CREDIT | Permissionless, no subscription needed |
+
+**Testnet configuration:**
 ```
 SKALE_RPC_URL=https://base-sepolia-testnet.skalenodes.com/v1/jubilant-horrible-ancha
 SKALE_CHAIN_ID=324705682
@@ -186,9 +193,32 @@ SKALE_BITE_CONTRACT=<your deployed BiteIntentStore address>
 SKALE_PRIVATE_KEY=<private key with sFUEL for gas>
 ```
 
+**Mainnet configuration:**
+```
+SKALE_RPC_URL=https://skale-base.skalenodes.com/v1/base
+SKALE_CHAIN_ID=1187947933
+SKALE_BITE_CONTRACT=<your deployed BiteIntentStore address>
+SKALE_PRIVATE_KEY=<private key with CREDITS for gas>
+```
+
+**SKALE Base Mainnet setup:**
+1. Buy CREDITS at [base.skalenodes.com/credits](https://base.skalenodes.com/credits) using the wallet from `SKALE_PRIVATE_KEY`
+2. Deploy the contract: `cd contracts && npm run deploy:base-mainnet`
+3. Set `SKALE_BITE_CONTRACT` to the deployed address
+
+SKALE Base mainnet is **permissionless** — no chain subscription required. Developers purchase CREDITS (with USDC or SKL) to pay for gas. The dashboard sidebar shows your current CREDIT balance when connected to mainnet.
+
+**Contract deployment scripts:**
+```bash
+npm run deploy:calypso       # Calypso testnet
+npm run deploy:base-sepolia  # SKALE Base Sepolia testnet
+npm run deploy:base-mainnet  # SKALE Base mainnet
+```
+
 **Admin endpoints** (when BITE is enabled):
 | Method | Path | Description |
 |--------|------|-------------|
+| `GET` | `/admin/skale/status` | Wallet address and CREDIT balance |
 | `POST` | `/admin/skale/test-anchor` | Test SKALE connectivity |
 | `GET` | `/admin/skale/intent/:id` | Read intent state |
 | `POST` | `/admin/skale/reveal/:id` | Manually trigger reveal |

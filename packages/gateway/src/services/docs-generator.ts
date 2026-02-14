@@ -2,10 +2,31 @@ import type { RouteRule } from "../routing.js";
 import type { RouteGroup } from "./config-store.js";
 
 export interface DocsMetadata {
-  title: string;
-  description: string;
+  title?: string;
+  description?: string;
   baseUrl: string;
   payToAddress: string;
+}
+
+/** Title-case a provider_id like "acme-data" → "Acme Data" */
+function formatProviderName(providerId: string): string {
+  return providerId
+    .split(/[-_]+/)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+/** Derive a human-readable provider label from routes' provider_id values. */
+function deriveProviderName(routes: RouteRule[]): string | null {
+  const ids = new Set<string>();
+  for (const r of routes) {
+    if (!r.restricted && r.provider?.provider_id) {
+      ids.add(r.provider.provider_id);
+    }
+  }
+  if (ids.size === 0) return null;
+  const names = [...ids].map(formatProviderName);
+  return names.join(", ");
 }
 
 export function generateAgentApiDocs(
@@ -13,6 +34,17 @@ export function generateAgentApiDocs(
   groups: RouteGroup[],
   meta: DocsMetadata,
 ): object {
+  // Derive provider-based title/description when not explicitly provided
+  const providerName = deriveProviderName(routes);
+  const title =
+    meta.title ||
+    (providerName ? `${providerName} (x402 Agent API)` : "RequestTap API");
+  const description =
+    meta.description ||
+    (providerName
+      ? `${providerName} — AI Agent API powered by RequestTap x402 Payment Gateway`
+      : "AI Agent API powered by RequestTap x402 Payment Gateway");
+
   // Build group lookup: toolId -> group
   const toolGroupMap = new Map<string, RouteGroup>();
   for (const group of groups) {
@@ -68,8 +100,8 @@ export function generateAgentApiDocs(
   return {
     openapi: "3.0.3",
     info: {
-      title: meta.title || "RequestTap API",
-      description: meta.description || "AI Agent API powered by RequestTap",
+      title,
+      description,
       version: "1.0.0",
       "x-requesttap-pay-to": meta.payToAddress,
     },

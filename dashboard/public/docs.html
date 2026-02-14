@@ -205,6 +205,62 @@
     }
     .doc-card .doc-usage strong { color: var(--green); font-weight: 600; }
 
+    /* API Docs section */
+    .api-docs-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .api-docs-header h1 { margin-bottom: 0; }
+    .api-docs-actions { display: flex; gap: 8px; align-items: center; }
+    .api-docs-actions button {
+      background: var(--surface); border: 1px solid var(--border); color: var(--text);
+      padding: 6px 14px; border-radius: 6px; font-size: 13px; cursor: pointer;
+      transition: border-color .15s;
+    }
+    .api-docs-actions button:hover { border-color: var(--accent); color: var(--accent); }
+    .api-docs-actions .btn-green { background: #238636; color: #fff; border-color: #2ea04366; }
+    .api-docs-actions .btn-green:hover { background: #2ea043; border-color: #2ea043; color: #fff; }
+    .method-badge {
+      display: inline-block; padding: 2px 8px; border-radius: 4px;
+      font-size: 11px; font-weight: 700; letter-spacing: 0.5px;
+      font-family: 'SF Mono', 'Cascadia Code', Consolas, monospace;
+    }
+    .method-badge.get { background: #238636; color: #fff; }
+    .method-badge.post { background: #1a6eff; color: #fff; }
+    .method-badge.put { background: #d29922; color: #fff; }
+    .method-badge.delete { background: #f85149; color: #fff; }
+    .method-badge.patch { background: #bc8cff; color: #fff; }
+    .route-path {
+      font-family: 'SF Mono', 'Cascadia Code', Consolas, monospace;
+      font-size: 14px; color: var(--text); margin-left: 8px;
+    }
+    .route-meta {
+      display: flex; gap: 12px; align-items: center; margin-top: 8px;
+      font-size: 12px; color: var(--muted);
+    }
+    .route-price {
+      color: var(--green); font-weight: 600;
+      font-family: 'SF Mono', 'Cascadia Code', Consolas, monospace;
+    }
+    .route-tag {
+      padding: 2px 8px; border-radius: 4px; font-size: 11px;
+      background: #58a6ff22; color: var(--accent); border: 1px solid #58a6ff44;
+    }
+    .api-section-divider {
+      margin: 40px 0 32px; padding-top: 32px; border-top: 2px solid var(--border);
+    }
+    .no-routes-msg {
+      color: var(--muted); font-size: 14px; padding: 20px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); text-align: center;
+    }
+    .openapi-link {
+      font-size: 12px; color: var(--muted); margin-top: 4px;
+      font-family: 'SF Mono', 'Cascadia Code', Consolas, monospace;
+    }
+    .openapi-link a { color: var(--accent); text-decoration: none; }
+    .openapi-link a:hover { text-decoration: underline; }
+
     /* Scrollbar */
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: var(--bg); }
@@ -237,6 +293,10 @@
     <div class="settings-dropdown" id="settings-dropdown">
       <div class="settings-dropdown-header">
         <span>SETTINGS</span>
+        <div style="display:flex;gap:6px;margin-left:auto">
+          <button class="test-btn" style="margin:0;padding:3px 10px;font-size:11px" onclick="loadDemoPreset('testnet')">Testnet</button>
+          <button class="test-btn" style="margin:0;padding:3px 10px;font-size:11px;background:#1a6eff;border-color:#1a6eff" onclick="loadDemoPreset('mainnet')">Mainnet</button>
+        </div>
       </div>
       <div class="settings-tabs">
         <button class="settings-tab active" onclick="switchSettingsTab('api')">API Provider</button>
@@ -275,6 +335,8 @@
           <div class="field-group">
             <label>SKALE Network</label>
             <select id="input-skale-network">
+              <option value="base-sepolia-testnet">Base Sepolia (Testnet, BITE)</option>
+              <option value="base-mainnet">SKALE Base (Mainnet, BITE)</option>
               <option value="calypso-testnet">Calypso Hub (Testnet)</option>
               <option value="staging-v3">Chaos (Testnet)</option>
               <option value="mainnet">mainnet</option>
@@ -383,6 +445,23 @@
   <!-- Right Panel -->
   <div class="panel-right">
     <div class="docs-content">
+      <!-- Dynamic API Documentation -->
+      <div id="api-docs-section">
+        <div class="api-docs-header">
+          <h1 id="api-docs-title">API Documentation</h1>
+          <div class="api-docs-actions">
+            <button onclick="copyOpenApiUrl()">Copy OpenAPI URL</button>
+            <button onclick="downloadOpenApi()">Download JSON</button>
+            <button class="btn-green" onclick="refreshApiDocs()">Regenerate</button>
+          </div>
+        </div>
+        <div class="docs-subtitle" id="api-docs-desc">Loading API documentation...</div>
+        <div class="openapi-link" id="api-docs-link"></div>
+        <div id="api-docs-routes"></div>
+      </div>
+
+      <div class="api-section-divider"></div>
+
       <h1>Technology Documentation</h1>
       <div class="docs-subtitle">Protocols, platforms, and tools used by RequestTap Router. Please refer to the project <a href="https://github.com/RequestTap/RequestTap-Router#readme" target="_blank" style="color:var(--accent)">README.md</a> for full detailed setup instructions.</div>
 
@@ -532,7 +611,7 @@ function updateNetworkLabels() {
   const baseLabel = document.getElementById('label-base');
   const skaleLabel = document.getElementById('label-skale');
   const baseIsMainnet = baseNet === 'base';
-  const skaleIsMainnet = skaleNet === 'mainnet';
+  const skaleIsMainnet = skaleNet === 'mainnet' || skaleNet === 'base-mainnet';
   const baseName = baseIsMainnet ? 'BASE MAINNET' : 'BASE TESTNET';
   const skaleName = skaleIsMainnet ? 'SKALE MAINNET' : 'SKALE TESTNET';
   const baseConnected = localStorage.getItem('rt-base-connected') === baseNet;
@@ -553,6 +632,14 @@ function updateNetworkLabels() {
   if (platSkale) {
     platSkale.textContent = skaleConnected ? skaleName + ' \u2713' : 'Not connected';
     platSkale.style.color = skaleConnected ? 'var(--green)' : 'var(--muted)';
+    if (skaleConnected && skaleIsMainnet) {
+      fetchSkaleBalance().then(bal => {
+        if (bal !== null) {
+          skaleLabel.innerHTML = skaleName + '<br>' + bal + ' CREDITS \u2713';
+          if (platSkale) platSkale.innerHTML = skaleName + '<br>' + bal + ' CREDITS \u2713';
+        }
+      });
+    }
   }
   if (platCdp) {
     const cdpConfigured = dashboardConfig && dashboardConfig.cdpApiKeyId;
@@ -563,6 +650,15 @@ function updateNetworkLabels() {
     const anyConnected = baseConnected || skaleConnected;
     platDot.className = 'conn-dot ' + (anyConnected ? 'online' : 'loading');
   }
+}
+
+async function fetchSkaleBalance() {
+  try {
+    const r = await api('/admin/skale/status');
+    if (!r.ok) return null;
+    const d = await r.json();
+    return d.balanceFormatted || null;
+  } catch { return null; }
 }
 
 function toggleSettings() {
@@ -614,12 +710,182 @@ async function testSkale() {
   } catch (e) { el.textContent = 'Failed: ' + e.message; el.style.color = 'var(--red)'; }
 }
 
+// ── Demo Presets ──
+const demoPresets = {
+  testnet: {
+    wallet: '0x1234567890abcdef1234567890abcdef12345678',
+    baseNetwork: 'base-sepolia',
+    skaleNetwork: 'calypso-testnet',
+    skaleRpc: 'https://base-sepolia-testnet.skalenodes.com/v1/base-testnet',
+    skaleContract: '0x64687C88C767D9a504c392C07393980af2879dC1',
+  },
+  mainnet: {
+    wallet: '0x5F80A88CbbeE1cd9905B89B45dd67c1225ace628',
+    baseNetwork: 'base',
+    skaleNetwork: 'base-mainnet',
+    skaleRpc: 'https://skale-base.skalenodes.com/v1/base',
+    skaleContract: '0x5237c33Ec0af68120B2dDEC5c668681d6F8ABD1E',
+  },
+};
+
+async function loadDemoPreset(network) {
+  const preset = demoPresets[network] || demoPresets.testnet;
+  document.getElementById('input-wallet-address').value = preset.wallet;
+  document.getElementById('input-base-network').value = preset.baseNetwork;
+  document.getElementById('input-skale-network').value = preset.skaleNetwork;
+  document.getElementById('input-skale-rpc').value = preset.skaleRpc;
+  document.getElementById('input-skale-contract').value = preset.skaleContract;
+  localStorage.setItem('rt-base-connected', preset.baseNetwork);
+  localStorage.setItem('rt-skale-connected', preset.skaleNetwork + '|' + preset.skaleRpc);
+  updateNetworkLabels();
+}
+
+// ── API Docs ─────────────────────────────────────────────────────────
+let cachedSpec = null;
+
+async function refreshApiDocs() {
+  const container = document.getElementById('api-docs-routes');
+  const titleEl = document.getElementById('api-docs-title');
+  const descEl = document.getElementById('api-docs-desc');
+  const linkEl = document.getElementById('api-docs-link');
+  container.innerHTML = '<div class="no-routes-msg">Loading...</div>';
+
+  try {
+    const r = await api('/admin/docs/openapi');
+    if (!r.ok) {
+      container.innerHTML = '<div class="no-routes-msg">Failed to load API docs (gateway unreachable)</div>';
+      return;
+    }
+    cachedSpec = await r.json();
+    renderApiDocs(cachedSpec, container, titleEl, descEl, linkEl);
+  } catch {
+    container.innerHTML = '<div class="no-routes-msg">Failed to load API docs</div>';
+  }
+}
+
+function renderApiDocs(spec, container, titleEl, descEl, linkEl) {
+  const info = spec.info || {};
+  titleEl.textContent = info.title || 'API Documentation';
+  descEl.textContent = info.description || '';
+
+  const gwUrl = localStorage.getItem('rt-gateway-url') || 'http://localhost:4402';
+  linkEl.innerHTML = 'OpenAPI Spec: <a href="' + gwUrl + '/docs" target="_blank">' + gwUrl + '/docs</a>';
+
+  const paths = spec.paths || {};
+  const entries = [];
+  for (const [path, methods] of Object.entries(paths)) {
+    for (const [method, op] of Object.entries(methods)) {
+      entries.push({ path, method: method.toUpperCase(), op });
+    }
+  }
+
+  if (entries.length === 0) {
+    container.innerHTML = '<div class="no-routes-msg">No routes configured. Add routes in the <a href="/routes" style="color:var(--accent)">Routes</a> tab.</div>';
+    return;
+  }
+
+  // Group by tag
+  const byTag = {};
+  for (const e of entries) {
+    const tag = (e.op.tags && e.op.tags[0]) || 'Ungrouped';
+    if (!byTag[tag]) byTag[tag] = [];
+    byTag[tag].push(e);
+  }
+
+  let html = '';
+  for (const [tag, routes] of Object.entries(byTag)) {
+    if (Object.keys(byTag).length > 1 || tag !== 'Ungrouped') {
+      const tagMeta = (spec.tags || []).find(t => t.name === tag);
+      html += '<div style="margin-top:20px;margin-bottom:10px">';
+      html += '<span style="font-size:14px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:0.5px">' + esc(tag) + '</span>';
+      if (tagMeta && tagMeta.description) {
+        html += ' <span style="font-size:12px;color:var(--muted);margin-left:8px">' + esc(tagMeta.description) + '</span>';
+      }
+      html += '</div>';
+    }
+
+    for (const { path, method, op } of routes) {
+      const price = op['x-requesttap-price'] || '—';
+      const toolId = op['x-requesttap-tool-id'] || op.operationId || '';
+      html += '<div class="doc-card" style="border-left-color:' + methodColor(method) + '">';
+      html += '<h2 style="gap:8px">';
+      html += '<span class="method-badge ' + method.toLowerCase() + '">' + method + '</span>';
+      html += '<span class="route-path">' + esc(path) + '</span>';
+      html += '</h2>';
+      if (op.summary) {
+        html += '<div class="doc-desc">' + esc(op.summary) + '</div>';
+      }
+      html += '<div class="route-meta">';
+      html += '<span class="route-price">' + esc(price) + ' USDC</span>';
+      if (toolId) html += '<span class="route-tag">tool: ' + esc(toolId) + '</span>';
+      html += '</div>';
+
+      // Parameters
+      if (op.parameters && op.parameters.length > 0) {
+        html += '<div style="margin-top:10px;font-size:12px;color:var(--muted)">';
+        html += '<strong style="color:var(--text)">Parameters:</strong> ';
+        html += op.parameters.map(p => '<code style="color:var(--accent);background:var(--bg);padding:1px 6px;border-radius:3px">' + esc(p.name) + '</code> (' + esc(p.in) + ')').join(', ');
+        html += '</div>';
+      }
+
+      // Responses
+      if (op.responses) {
+        html += '<div style="margin-top:8px;font-size:12px;color:var(--muted)">';
+        html += '<strong style="color:var(--text)">Responses:</strong> ';
+        html += Object.entries(op.responses).map(([code, r]) => {
+          const color = code.startsWith('2') ? 'var(--green)' : code === '402' ? 'var(--orange)' : 'var(--red)';
+          return '<span style="color:' + color + '">' + code + '</span> ' + esc(r.description || '');
+        }).join(' &middot; ');
+        html += '</div>';
+      }
+      html += '</div>';
+    }
+  }
+
+  container.innerHTML = html;
+}
+
+function methodColor(m) {
+  const colors = { GET: '#238636', POST: '#1a6eff', PUT: '#d29922', DELETE: '#f85149', PATCH: '#bc8cff' };
+  return colors[m] || 'var(--accent)';
+}
+
+function esc(s) {
+  if (!s) return '';
+  const d = document.createElement('div');
+  d.textContent = String(s);
+  return d.innerHTML;
+}
+
+function copyOpenApiUrl() {
+  const gwUrl = localStorage.getItem('rt-gateway-url') || 'http://localhost:4402';
+  navigator.clipboard.writeText(gwUrl + '/docs').then(() => {
+    const btn = document.querySelector('.api-docs-actions button');
+    const orig = btn.textContent;
+    btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = orig; }, 1500);
+  });
+}
+
+function downloadOpenApi() {
+  if (!cachedSpec) { refreshApiDocs(); return; }
+  const blob = new Blob([JSON.stringify(cachedSpec, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const title = (cachedSpec.info && cachedSpec.info.title) || 'api';
+  a.download = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+$/, '') + '-openapi.json';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 // ── Init ──
 (function init() {
   updateNetworkLabels();
   loadDashboardConfig();
   refreshHealth();
   refreshStats();
+  refreshApiDocs();
   setInterval(() => { refreshHealth(); refreshStats(); }, 10000);
 })();
 </script>

@@ -11,10 +11,17 @@ import { BITE } from "@skalenetwork/bite";
 import type { GatewayConfig } from "./config.js";
 import { logger } from "./utils/logger.js";
 
+export interface BiteServiceStatus {
+  address: string;
+  balance: string;
+  balanceFormatted: string;
+}
+
 export interface BiteService {
   encryptIntent(intentId: string, data: Uint8Array): Promise<string>;
   triggerReveal(intentId: string): Promise<void>;
   getDecryptedIntent(intentId: string): Promise<Uint8Array | null>;
+  getStatus(): Promise<BiteServiceStatus>;
 }
 
 const biteIntentStoreAbi = [
@@ -77,7 +84,7 @@ export function createBiteService(config: GatewayConfig): BiteService | null {
     ? {
         id: config.skaleChainId,
         name: "SKALE",
-        nativeCurrency: { name: "sFUEL", symbol: "sFUEL", decimals: 18 },
+        nativeCurrency: { name: "CREDIT", symbol: "CREDIT", decimals: 18 },
         rpcUrls: { default: { http: [rpcUrl] } },
       }
     : undefined;
@@ -218,6 +225,16 @@ export function createBiteService(config: GatewayConfig): BiteService | null {
       }
 
       return new Uint8Array(Buffer.from((data as string).slice(2), "hex"));
+    },
+
+    async getStatus(): Promise<BiteServiceStatus> {
+      const balance = await publicClient.getBalance({ address: account.address });
+      const formatted = (Number(balance) / 1e18).toFixed(2);
+      return {
+        address: account.address,
+        balance: balance.toString(),
+        balanceFormatted: formatted,
+      };
     },
   };
 }

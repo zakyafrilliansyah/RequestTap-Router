@@ -6,15 +6,22 @@ allowed-tools: Bash, Read, Write, Glob, Edit
 
 Start the RequestTap Router locally. Follow these steps in order:
 
+If the user passes "mainnet" as an argument, use `.env.mainnet` instead of `.env` throughout.
+
 ## 1. Build all workspaces
 
 ```
 npm run build
 ```
 
-## 2. Ensure `.env` exists at the repo root
+## 2. Determine env file
 
-Check if `.env` exists. If not, create one with dev defaults:
+- If the user said "mainnet": use `.env.mainnet`
+- Otherwise (default): use `.env`
+
+Check if the chosen env file exists. If not:
+
+For `.env` (testnet), create one with dev defaults:
 
 ```
 RT_PAY_TO_ADDRESS=0x0000000000000000000000000000000000000001
@@ -24,6 +31,8 @@ RT_FACILITATOR_URL=https://www.x402.org
 RT_BASE_NETWORK=base-sepolia
 RT_ROUTES_FILE=routes.json
 ```
+
+For `.env.mainnet`, tell the user they need to create it from `.env.example` with mainnet values (real wallet address, `RT_BASE_NETWORK=base`, mainnet facilitator URL).
 
 ## 3. Ensure `routes.json` exists at the repo root
 
@@ -39,8 +48,10 @@ Use `netstat -ano | findstr :PORT` to find PIDs, then `powershell -Command "Stop
 
 ## 5. Start the gateway (background)
 
+Use the chosen env file:
+
 ```
-node --env-file=.env packages/gateway/dist/index.js
+node --env-file=<ENV_FILE> packages/gateway/dist/index.js
 ```
 
 Run in background. Wait a few seconds and confirm it started by checking output for "listening on port".
@@ -55,9 +66,11 @@ Run in background.
 
 ## 7. Print connection URLs
 
-Print these to the user:
+Print these to the user, noting which network is active:
 
 ```
+Network:   <TESTNET or MAINNET>
+Env file:  <.env or .env.mainnet>
 Gateway:   http://localhost:4402
 Dashboard: http://localhost:3000/dashboard
 Docs:      http://localhost:3000/docs

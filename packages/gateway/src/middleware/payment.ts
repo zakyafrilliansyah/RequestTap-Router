@@ -6,6 +6,7 @@ import type { Request, Response, NextFunction } from "express";
 import type { GatewayConfig } from "../config.js";
 import type { RouteRule } from "../routing.js";
 import { logger } from "../utils/logger.js";
+import { generateJwt } from "@coinbase/cdp-sdk/auth";
 
 const NETWORK_MAP: Record<string, `${string}:${string}`> = {
   "base-sepolia": "eip155:84532",
@@ -55,6 +56,12 @@ export interface SettlementResult {
 export interface PaymentSystem {
   middleware: (req: Request, res: Response, next: NextFunction) => Promise<void>;
   settle: (req: Request) => Promise<SettlementResult>;
+  addRoute: (rule: RouteRule) => void;
+  removeRoute: (rule: RouteRule) => void;
+  /** CAIP-2 network the payment system was initialized for (e.g. "eip155:84532") */
+  getNetwork: () => string;
+  /** Human-readable network name (e.g. "base-sepolia") */
+  getNetworkName: () => string;
 }
 
 export function createPaymentSystem(
@@ -63,17 +70,65 @@ export function createPaymentSystem(
 ): PaymentSystem {
   const routesConfig = buildRoutesConfig(routes, config);
 
-  // If no paid routes, return pass-through
+  // Capture the network at init time — dashboard config may mutate config.baseNetwork
+  // later, but the facilitator is initialized for this specific network only.
+  const initNetwork = toCAIP2Network(config.baseNetwork);
+  const initNetworkName = config.baseNetwork;
+
+  // If no paid routes, return pass-through (but still allow dynamic route addition)
   if (Object.keys(routesConfig).length === 0) {
+    const noopAdd = () => {};
+    const noopRemove = () => {};
     return {
       middleware: async (_req, _res, next) => {
         next();
       },
       settle: async () => ({ txHash: null, network: null, payer: null }),
+      addRoute: noopAdd,
+      removeRoute: noopRemove,
+      getNetwork: () => initNetwork,
+      getNetworkName: () => initNetworkName,
     };
   }
 
-  const facilitator = new HTTPFacilitatorClient({ url: config.facilitatorUrl });
+  const facilitatorConfig: {
+    url: string;
+    createAuthHeaders?: () => Promise<{
+      verify: Record<string, string>;
+      settle: Record<string, string>;
+      supported: Record<string, string>;
+    }>;
+  } = {
+    url: config.facilitatorUrl,
+  };
+
+  // CDP facilitator requires JWT auth
+  if (config.cdpApiKeyId && config.cdpApiKeySecret) {
+    const apiKeyId = config.cdpApiKeyId;
+    const apiKeySecret = config.cdpApiKeySecret;
+    const facilitatorHost = new URL(config.facilitatorUrl).host;
+
+    facilitatorConfig.createAuthHeaders = async () => {
+      const makeHeader = async (method: string, path: string) => {
+        const token = await generateJwt({
+          apiKeyId,
+          apiKeySecret,
+          requestMethod: method,
+          requestHost: facilitatorHost,
+          requestPath: path,
+        });
+        return { Authorization: `Bearer ${token}` };
+      };
+      const basePath = new URL(config.facilitatorUrl).pathname.replace(/\/$/, "");
+      return {
+        verify: await makeHeader("POST", `${basePath}/verify`),
+        settle: await makeHeader("POST", `${basePath}/settle`),
+        supported: await makeHeader("GET", `${basePath}/supported`),
+      };
+    };
+  }
+
+  const facilitator = new HTTPFacilitatorClient(facilitatorConfig);
   const resourceServer = new x402ResourceServer(facilitator);
   registerExactEvmScheme(resourceServer);
 
@@ -105,7 +160,8 @@ export function createPaymentSystem(
       paymentHeader: adapter.getHeader("x-payment") ?? adapter.getHeader("payment"),
     };
 
-    if (!httpServer.requiresPayment(context)) {
+    const requires = httpServer.requiresPayment(context);
+    if (!requires) {
       next();
       return;
     }
@@ -177,5 +233,44 @@ export function createPaymentSystem(
     }
   };
 
-  return { middleware, settle };
+  // Dynamic route management — pushes/removes from x402's internal compiledRoutes
+  const addRoute = (rule: RouteRule) => {
+    const price = parseFloat(rule.price_usdc);
+    if (price <= 0) return;
+    const x402Path = rule.path.replace(/:[\w]+/g, "*");
+    const key = `${rule.method.toUpperCase()} ${x402Path}`;
+    const routeConfig = {
+      accepts: [{
+        scheme: "exact",
+        price: `$${rule.price_usdc}`,
+        network: initNetwork, // Use init-time network, not current config
+        payTo: config.payToAddress,
+      }],
+      description: `${rule.tool_id} via ${rule.provider.provider_id}`,
+      mimeType: "application/json",
+    };
+    // Update routesConfig object
+    (routesConfig as any)[key] = routeConfig;
+    // Push compiled route into x402's internal array so requiresPayment() sees it
+    const parsed = (httpServer as any).parseRoutePattern(key);
+    (httpServer as any).compiledRoutes.push({
+      verb: parsed.verb,
+      regex: parsed.regex,
+      config: routeConfig,
+    });
+  };
+
+  const removeRoute = (rule: RouteRule) => {
+    const x402Path = rule.path.replace(/:[\w]+/g, "*");
+    const key = `${rule.method.toUpperCase()} ${x402Path}`;
+    delete (routesConfig as any)[key];
+    // Remove from x402's compiled routes
+    const parsed = (httpServer as any).parseRoutePattern(key);
+    const regexStr = parsed.regex.toString();
+    (httpServer as any).compiledRoutes = (httpServer as any).compiledRoutes.filter(
+      (r: any) => !(r.verb === parsed.verb && r.regex.toString() === regexStr),
+    );
+  };
+
+  return { middleware, settle, addRoute, removeRoute, getNetwork: () => initNetwork, getNetworkName: () => initNetworkName };
 }

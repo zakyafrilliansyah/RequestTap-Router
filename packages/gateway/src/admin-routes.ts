@@ -9,6 +9,7 @@ import type { GatewayConfig } from "./config.js";
 import type { ConfigStore } from "./services/config-store.js";
 import type { BiteService } from "./bite.js";
 import type { ReputationService } from "./services/reputation.js";
+import type { PaymentSystem } from "./middleware/payment.js";
 import { parseOpenApiToRoutes } from "./services/openapi-parser.js";
 import { generateAgentApiDocs } from "./services/docs-generator.js";
 import { assertNotX402Upstream, X402UpstreamError } from "./utils/x402-probe.js";
@@ -24,10 +25,11 @@ export interface AdminRouterDeps {
   startTime: number;
   biteService: BiteService | null;
   reputationService: ReputationService | null;
+  paymentSystem: PaymentSystem;
 }
 
 export function createAdminRouter(deps: AdminRouterDeps): Router {
-  const { routeManager, receiptStore, spendTracker, lifetimeTracker, config, configStore, startTime, biteService, reputationService } = deps;
+  const { routeManager, receiptStore, spendTracker, lifetimeTracker, config, configStore, startTime, biteService, reputationService, paymentSystem } = deps;
   const router = Router();
 
   router.use(createAdminAuth());
@@ -371,8 +373,6 @@ export function createAdminRouter(deps: AdminRouterDeps): Router {
     const routes = routeManager.getRoutes();
     const dashConfig = configStore.load();
     const spec = generateAgentApiDocs(routes, dashConfig.routeGroups, {
-      title: "RequestTap API",
-      description: "AI Agent API powered by RequestTap",
       baseUrl: `http://localhost:${config.port}`,
       payToAddress: dashConfig.payToAddress || config.payToAddress,
     });
@@ -404,6 +404,51 @@ export function createAdminRouter(deps: AdminRouterDeps): Router {
       return;
     }
     res.json({ ok: true, blacklist: list });
+  });
+
+  // GET /admin/facilitator/status — check x402 facilitator connectivity
+  router.get("/facilitator/status", async (_req, res) => {
+    const url = config.facilitatorUrl.replace(/\/$/, "") + "/supported";
+    try {
+      const headers: Record<string, string> = {};
+      if (config.cdpApiKeyId && config.cdpApiKeySecret) {
+        const { generateJwt } = await import("@coinbase/cdp-sdk/auth");
+        const host = new URL(config.facilitatorUrl).host;
+        const path = new URL(url).pathname;
+        const token = await generateJwt({
+          apiKeyId: config.cdpApiKeyId,
+          apiKeySecret: config.cdpApiKeySecret,
+          requestMethod: "GET",
+          requestHost: host,
+          requestPath: path,
+        });
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+      const r = await fetch(url, { headers, signal: AbortSignal.timeout(10000) });
+      if (!r.ok) {
+        res.status(502).json({ error: `Facilitator returned ${r.status}`, url });
+        return;
+      }
+      const data = await r.json();
+      const kinds = (data as any).kinds || [];
+      res.json({ ok: true, url: config.facilitatorUrl, kinds, cdpAuth: !!config.cdpApiKeyId });
+    } catch (err: any) {
+      res.status(502).json({ error: `Facilitator unreachable: ${err.message}`, url });
+    }
+  });
+
+  // GET /admin/skale/status — wallet address + CREDIT balance
+  router.get("/skale/status", async (_req, res) => {
+    if (!biteService) {
+      res.status(400).json({ error: "SKALE not configured" });
+      return;
+    }
+    try {
+      const status = await biteService.getStatus();
+      res.json(status);
+    } catch (err: any) {
+      res.status(500).json({ error: `SKALE status failed: ${err.message}` });
+    }
   });
 
   // POST /admin/skale/test-anchor
@@ -474,6 +519,213 @@ export function createAdminRouter(deps: AdminRouterDeps): Router {
       res.json({ ...result, min_score: config.erc8004MinScore ?? 20 });
     } catch (err: any) {
       res.status(500).json({ error: `Reputation check failed: ${err.message}` });
+    }
+  });
+
+  // POST /admin/e2e/payment — real $0.01 USDC payment lifecycle test
+  router.post("/e2e/payment", async (_req, res) => {
+    const t0 = performance.now();
+    const CDP_API_KEY_ID = process.env.CDP_API_KEY_ID;
+    const CDP_API_KEY_SECRET = process.env.CDP_API_KEY_SECRET;
+    const CDP_WALLET_SECRET = process.env.CDP_WALLET_SECRET;
+    // Use the payment system's init-time network, not config.baseNetwork which
+    // may have been mutated by the dashboard config endpoint.
+    const network = paymentSystem.getNetworkName();
+
+    // Skip if CDP credentials missing
+    if (!CDP_API_KEY_ID || !CDP_API_KEY_SECRET) {
+      res.json({ ok: false, skip: true, reason: "Missing CDP_API_KEY_ID or CDP_API_KEY_SECRET" });
+      return;
+    }
+    if (!CDP_WALLET_SECRET || CDP_WALLET_SECRET === "REPLACE_ME_FROM_CDP_PORTAL") {
+      res.json({ ok: false, skip: true, reason: "Missing CDP_WALLET_SECRET — generate one at https://portal.cdp.coinbase.com/products/server-wallets" });
+      return;
+    }
+    if (!config.payToAddress) {
+      res.json({ ok: false, skip: true, reason: "No RT_PAY_TO_ADDRESS configured" });
+      return;
+    }
+
+    const steps: string[] = [];
+    const E2E_TOOL_ID = "__e2e_paid__";
+    const E2E_PATH = "/api/v1/__e2e_paid__";
+    let cleanupDone = false;
+
+    const e2eRoute = {
+      method: "GET",
+      path: E2E_PATH,
+      tool_id: E2E_TOOL_ID,
+      price_usdc: "0.01",
+      provider: {
+        provider_id: "__e2e_payment__",
+        backend_url: "",  // set later
+      },
+    };
+    const cleanup = () => {
+      if (cleanupDone) return;
+      cleanupDone = true;
+      try { routeManager.removeRoute(E2E_TOOL_ID); } catch {}
+      try { paymentSystem.removeRoute(e2eRoute); } catch {}
+    };
+
+    try {
+      // Step 1: Initialize CDP client
+      steps.push("Initializing CDP client");
+      const { CdpClient } = await import("@coinbase/cdp-sdk");
+      const cdp = new CdpClient({
+        apiKeyId: CDP_API_KEY_ID,
+        apiKeySecret: CDP_API_KEY_SECRET,
+        walletSecret: CDP_WALLET_SECRET,
+      });
+
+      // Step 2: Get or create EVM account
+      steps.push("Getting EVM account");
+      const account = await (cdp as any).evm.getOrCreateAccount({
+        name: "requesttap-e2e-payer",
+      });
+      const accountAddress: string = account.address;
+
+      // Step 3: Check USDC balance
+      steps.push("Checking USDC balance");
+      const balances = await (cdp as any).evm.listTokenBalances({
+        address: accountAddress,
+        network,
+      });
+      const usdcBalance = balances.balances.find(
+        (b: any) => b.token.symbol?.toUpperCase() === "USDC",
+      );
+      const balanceBefore = usdcBalance
+        ? Number(usdcBalance.amount.amount) / 10 ** usdcBalance.amount.decimals
+        : 0;
+
+      if (balanceBefore < 0.01) {
+        cleanup();
+        res.json({
+          ok: false,
+          skip: true,
+          reason: `USDC balance too low: ${balanceBefore} (need ≥ 0.01)`,
+          account: accountAddress,
+          balance: balanceBefore,
+          network,
+        });
+        return;
+      }
+
+      // Step 4: Add temp $0.01 route pointing to local echo upstream
+      steps.push("Adding temp $0.01 route");
+      // Use the dashboard's e2e-test-upstream as the echo backend (port 3000)
+      const dashboardPort = process.env.DASHBOARD_PORT || "3000";
+      const upstreamUrl = `http://127.0.0.1:${dashboardPort}/e2e-test-upstream`;
+      e2eRoute.provider.backend_url = upstreamUrl;
+
+      routeManager.addRoute(e2eRoute, { skipSsrf: true });
+      paymentSystem.addRoute(e2eRoute);
+
+      // Step 5: Raw fetch without payment → expect 402
+      steps.push("Raw request (expect 402)");
+      const gatewayUrl = `http://localhost:${config.port}`;
+      const dashConfig = configStore.load();
+      const apiKeyHeaders: Record<string, string> = {};
+      if (dashConfig.apiKey) apiKeyHeaders["authorization"] = `Bearer ${dashConfig.apiKey}`;
+      const rawRes = await fetch(`${gatewayUrl}${E2E_PATH}`, { headers: apiKeyHeaders });
+      if (rawRes.status !== 402) {
+        cleanup();
+        const body = await rawRes.text().catch(() => "");
+        res.json({
+          ok: false,
+          error: `Expected 402 but got ${rawRes.status}`,
+          body,
+          steps,
+          elapsed: Math.round(performance.now() - t0),
+        });
+        return;
+      }
+
+      // Step 6: Paid request via wrapFetchWithPayment
+      steps.push("Paying with x402 (wrapFetchWithPayment)");
+      const { x402Client, wrapFetchWithPayment } = await import("@x402/fetch");
+      const { registerExactEvmScheme } = await import("@x402/evm/exact/client");
+      const x402 = new x402Client();
+      registerExactEvmScheme(x402, { signer: account as any });
+
+      const paymentFetch = wrapFetchWithPayment(fetch, x402);
+      const paidRes = await paymentFetch(`${gatewayUrl}${E2E_PATH}`, {
+        method: "GET",
+        headers: { "content-type": "application/json", ...apiKeyHeaders },
+      });
+
+      if (paidRes.status !== 200) {
+        cleanup();
+        const body = await paidRes.text().catch(() => "");
+        res.json({
+          ok: false,
+          error: `Payment request returned ${paidRes.status} (expected 200)`,
+          body,
+          steps,
+          elapsed: Math.round(performance.now() - t0),
+        });
+        return;
+      }
+
+      // Step 7: Decode receipt
+      steps.push("Decoding receipt");
+      const receiptHeader = paidRes.headers.get("x-receipt");
+      let receipt: any = null;
+      if (receiptHeader) {
+        receipt = JSON.parse(Buffer.from(receiptHeader, "base64").toString());
+      }
+
+      // Step 8: Check post-payment balance
+      steps.push("Checking post-payment balance");
+      const postBalances = await (cdp as any).evm.listTokenBalances({
+        address: accountAddress,
+        network,
+      });
+      const postUsdc = postBalances.balances.find(
+        (b: any) => b.token.symbol?.toUpperCase() === "USDC",
+      );
+      const balanceAfter = postUsdc
+        ? Number(postUsdc.amount.amount) / 10 ** postUsdc.amount.decimals
+        : 0;
+
+      // Step 9: Cleanup route
+      cleanup();
+
+      // Build explorer URL
+      const isMainnet = network === "base" || network === "base-mainnet";
+      const explorerBase = isMainnet ? "https://basescan.org" : "https://sepolia.basescan.org";
+      const txHash = receipt?.payment_tx_hash || null;
+      const explorerUrl = txHash ? `${explorerBase}/tx/${txHash}` : null;
+
+      const elapsed = Math.round(performance.now() - t0);
+      res.json({
+        ok: true,
+        account: accountAddress,
+        network,
+        balance_before: balanceBefore,
+        balance_after: balanceAfter,
+        spent: parseFloat((balanceBefore - balanceAfter).toFixed(6)),
+        txHash,
+        explorer: explorerUrl,
+        receipt: receipt ? {
+          request_id: receipt.request_id,
+          tool_id: receipt.tool_id,
+          outcome: receipt.outcome,
+          price_usdc: receipt.price_usdc,
+          payment_tx_hash: receipt.payment_tx_hash,
+          latency_ms: receipt.latency_ms,
+        } : null,
+        steps,
+        elapsed,
+      });
+    } catch (err: any) {
+      cleanup();
+      res.status(500).json({
+        ok: false,
+        error: err.message,
+        steps,
+        elapsed: Math.round(performance.now() - t0),
+      });
     }
   });
 

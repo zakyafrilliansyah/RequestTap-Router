@@ -96,18 +96,19 @@ export function createApp({ config, routes }: CreateAppOptions) {
     persistedConfig.baseNetwork = config.baseNetwork;
     needsSave = true;
   }
-  if (!persistedConfig.skaleRpcUrl && config.skaleRpcUrl) {
+  if (config.skaleRpcUrl && persistedConfig.skaleRpcUrl !== config.skaleRpcUrl) {
     persistedConfig.skaleRpcUrl = config.skaleRpcUrl;
     needsSave = true;
   }
-  if (!persistedConfig.skaleBiteContract && config.skaleBiteContract) {
+  if (config.skaleBiteContract && persistedConfig.skaleBiteContract !== config.skaleBiteContract) {
     persistedConfig.skaleBiteContract = config.skaleBiteContract;
     needsSave = true;
   }
   if (config.skaleChainId) {
     const networkLabel = config.skaleChainId === 974399131 ? "calypso-testnet"
       : config.skaleChainId === 1351057110 ? "staging-v3"
-      : config.skaleChainId === 324705682 ? "base-sepolia-testnet" : "mainnet";
+      : config.skaleChainId === 324705682 ? "base-sepolia-testnet"
+      : config.skaleChainId === 1187947933 ? "base-mainnet" : "mainnet";
     if (!persistedConfig.skaleNetwork || persistedConfig.skaleNetwork !== networkLabel) {
       persistedConfig.skaleNetwork = networkLabel;
       needsSave = true;
@@ -160,8 +161,6 @@ export function createApp({ config, routes }: CreateAppOptions) {
       routeManager.getRoutes(),
       dashConfig.routeGroups || [],
       {
-        title: "RequestTap API",
-        description: "AI Agent API powered by RequestTap x402 Payment Gateway",
         baseUrl: `${_req.protocol}://${_req.get("host") || "localhost:" + config.port}`,
         payToAddress: dashConfig.payToAddress || config.payToAddress,
       },
@@ -170,7 +169,7 @@ export function createApp({ config, routes }: CreateAppOptions) {
   });
 
   // Admin API
-  app.use("/admin", createAdminRouter({ routeManager, receiptStore, spendTracker, lifetimeTracker, config, configStore, startTime, biteService, reputationService }));
+  app.use("/admin", createAdminRouter({ routeManager, receiptStore, spendTracker, lifetimeTracker, config, configStore, startTime, biteService, reputationService, paymentSystem }));
 
   // Gateway routes - catch all non-health requests
   // NOTE: must use app.all (not app.use) so req.path retains the full path

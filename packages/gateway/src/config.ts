@@ -12,6 +12,8 @@ export interface GatewayConfig {
   erc8004Contract?: string;
   erc8004MinScore?: number;
   gatewayDomain?: string;
+  cdpApiKeyId?: string;
+  cdpApiKeySecret?: string;
 }
 
 export function loadConfig(env: Record<string, string | undefined> = process.env): GatewayConfig {
@@ -41,6 +43,11 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     config.erc8004RpcUrl = env.ERC8004_RPC_URL;
     config.erc8004Contract = env.ERC8004_CONTRACT;
     config.erc8004MinScore = env.ERC8004_MIN_SCORE ? parseInt(env.ERC8004_MIN_SCORE, 10) : 20;
+  }
+
+  if (env.CDP_API_KEY_ID && env.CDP_API_KEY_SECRET) {
+    config.cdpApiKeyId = env.CDP_API_KEY_ID;
+    config.cdpApiKeySecret = env.CDP_API_KEY_SECRET;
   }
 
   if (env.SKALE_RPC_URL) {

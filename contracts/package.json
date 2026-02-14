@@ -6,7 +6,9 @@
   "scripts": {
     "compile": "npx hardhat compile",
     "test": "npx hardhat test",
-    "deploy:calypso": "npx hardhat run scripts/deploy.cjs --network skaleCalypso"
+    "deploy:calypso": "npx hardhat run scripts/deploy.cjs --network skaleCalypso",
+    "deploy:base-sepolia": "npx hardhat run scripts/deploy.cjs --network skaleBaseSepolia",
+    "deploy:base-mainnet": "npx hardhat run scripts/deploy.cjs --network skaleBaseMainnet"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^5.0.0",

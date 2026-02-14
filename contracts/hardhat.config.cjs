@@ -25,6 +25,13 @@ const config = {
         ? [process.env.SKALE_PRIVATE_KEY]
         : [],
     },
+    skaleBaseMainnet: {
+      url: "https://skale-base.skalenodes.com/v1/base",
+      chainId: 1187947933,
+      accounts: process.env.SKALE_PRIVATE_KEY
+        ? [process.env.SKALE_PRIVATE_KEY]
+        : [],
+    },
   },
 };
 

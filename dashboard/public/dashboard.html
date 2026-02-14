@@ -60,8 +60,8 @@
     .settings-backdrop.open { display: flex; }
     .settings-modal {
       background: var(--surface); border: 1px solid var(--border);
-      border-radius: var(--radius); width: 600px; max-width: calc(100vw - 40px);
-      box-shadow: 0 16px 48px rgba(0,0,0,.5); max-height: 80vh; display: flex; flex-direction: column;
+      border-radius: var(--radius); width: 900px; max-width: calc(100vw - 40px);
+      box-shadow: 0 16px 48px rgba(0,0,0,.5); max-height: 90vh; display: flex; flex-direction: column;
     }
     .settings-modal-header {
       display: flex; align-items: center; justify-content: space-between;
@@ -99,6 +99,7 @@
       width: 100%; background: var(--bg); border: 1px solid var(--border);
       border-radius: 6px; padding: 8px 10px; color: var(--text);
       font-family: 'SF Mono', 'Cascadia Code', Consolas, monospace; font-size: 14px;
+      box-sizing: border-box;
     }
     .field-group input:focus, .field-group select:focus { outline: none; border-color: var(--accent); }
     .test-btn {
@@ -108,6 +109,47 @@
     }
     .test-btn:hover { background: #2ea043; }
     .test-result { font-size: 14px; margin-top: 4px; }
+    .toggle-switch-row {
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+      padding: 12px 16px; cursor: pointer;
+    }
+    .toggle-switch-label { font-size: 14px; font-weight: 600; color: var(--text); }
+    .toggle-switch {
+      position: relative; width: 64px; height: 32px; flex-shrink: 0;
+    }
+    .toggle-switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+    .toggle-slider {
+      position: absolute; inset: 0; background: var(--border); border-radius: 16px;
+      transition: background .2s;
+    }
+    .toggle-slider::after {
+      content: ''; position: absolute; top: 3px; left: 3px;
+      width: 26px; height: 26px; background: var(--surface); border-radius: 50%;
+      transition: transform .2s; box-shadow: 0 1px 3px rgba(0,0,0,.3);
+    }
+    .toggle-switch input:checked + .toggle-slider { background: var(--green); }
+    .toggle-switch input:checked + .toggle-slider::after { transform: translateX(32px); }
+    .toggle-text-on, .toggle-text-off {
+      position: absolute; top: 0; height: 32px; line-height: 32px;
+      font-size: 10px; font-weight: 700; letter-spacing: 0.5px; pointer-events: none;
+    }
+    .toggle-text-on { left: 10px; color: #fff; opacity: 0; transition: opacity .2s; }
+    .toggle-text-off { right: 8px; color: var(--muted); opacity: 1; transition: opacity .2s; }
+    .toggle-switch input:checked ~ .toggle-text-on { opacity: 1; }
+    .toggle-switch input:checked ~ .toggle-text-off { opacity: 0; }
+    .security-status-row {
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+      padding: 10px 14px;
+    }
+    .security-status-label { font-size: 13px; color: var(--text); font-weight: 500; }
+    .security-status-badge {
+      font-size: 11px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase;
+      padding: 3px 10px; border-radius: 10px;
+    }
+    .security-status-badge.on { background: rgba(63,185,80,.15); color: var(--green); }
+    .security-status-badge.off { background: rgba(139,148,158,.12); color: var(--muted); }
     .cdp-env-grid { display: flex; flex-direction: column; gap: 8px; }
     .cdp-env-row {
       display: flex; align-items: center; justify-content: space-between;
@@ -509,9 +551,11 @@
     </div>
     <div class="settings-tabs">
       <button class="settings-tab active" onclick="switchSettingsTab('api')">API Provider</button>
-      <button class="settings-tab" onclick="switchSettingsTab('base')">Base L2</button>
+      <button class="settings-tab" onclick="switchSettingsTab('base')">Base</button>
       <button class="settings-tab" onclick="switchSettingsTab('skale')">SKALE</button>
       <button class="settings-tab" onclick="switchSettingsTab('cdp')">CDP</button>
+      <button class="settings-tab" onclick="switchSettingsTab('access')">Access Control</button>
+      <button class="settings-tab" onclick="switchSettingsTab('security')">Security</button>
     </div>
     <div class="settings-modal-body">
       <!-- API Provider -->
@@ -551,9 +595,9 @@
           <label>SKALE Network</label>
           <select id="input-skale-network">
             <option value="base-sepolia-testnet">Base Sepolia (Testnet, BITE)</option>
+            <option value="base-mainnet">SKALE Base (Mainnet, BITE)</option>
             <option value="calypso-testnet">Calypso Hub (Testnet)</option>
             <option value="staging-v3">Chaos (Testnet)</option>
-            <option value="mainnet">mainnet</option>
           </select>
         </div>
         <div class="field-group">
@@ -577,6 +621,113 @@
         </div>
         <button class="test-btn" onclick="testCdpConnection()">Test CDP Connection</button>
         <div class="test-result" id="test-cdp-result"></div>
+      </div>
+      <!-- Access Control -->
+      <div class="settings-tab-panel" id="stab-access">
+        <div class="settings-section-label" style="padding-top:0;margin-top:0;border-top:none">AP2 Mandates</div>
+        <label class="toggle-switch-row">
+          <span class="toggle-switch-label">Enforce API mandate</span>
+          <div class="toggle-switch">
+            <input type="checkbox" id="input-ap2-enabled" />
+            <span class="toggle-slider"></span>
+            <span class="toggle-text-on">ON</span>
+            <span class="toggle-text-off">OFF</span>
+          </div>
+        </label>
+
+        <div class="settings-section-label">Blacklist</div>
+        <div style="display:flex;gap:8px">
+          <input type="text" id="input-blacklist-address" placeholder="0x agent address..." style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-family:'SF Mono','Cascadia Code',Consolas,monospace;font-size:14px;box-sizing:border-box" />
+          <button class="test-btn" style="width:auto;flex-shrink:0" onclick="addToBlacklist()">Add</button>
+        </div>
+        <div id="blacklist-summary" style="display:none;align-items:center;justify-content:space-between;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 12px">
+          <span style="font-size:13px;color:var(--text)"><span id="blacklist-count">0</span> blocked agents</span>
+          <button style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:13px;font-weight:600;padding:0" id="blacklist-toggle-btn" onclick="toggleBlacklistExpanded()">View all</button>
+        </div>
+        <div id="blacklist-list" style="display:none;flex-direction:column;gap:4px;max-height:200px;overflow-y:auto"></div>
+
+        <div class="settings-section-label">ERC-8004 Reputation</div>
+        <div class="field-group">
+          <label>RPC URL</label>
+          <input type="text" id="input-erc8004-rpc" placeholder="https://..." />
+        </div>
+        <div style="display:flex;gap:8px">
+          <div class="field-group" style="flex:1;min-width:0">
+            <label>Contract</label>
+            <input type="text" id="input-erc8004-contract" placeholder="0x..." />
+          </div>
+          <div class="field-group" style="width:100px;flex-shrink:0">
+            <label>Min Score</label>
+            <input type="number" id="input-erc8004-min-score" placeholder="20" value="20" min="0" />
+          </div>
+        </div>
+        <button class="test-btn" onclick="testErc8004Settings()">Test Reputation Lookup</button>
+        <div class="test-result" id="test-erc8004-settings-result"></div>
+      </div>
+      <!-- Security -->
+      <div class="settings-tab-panel" id="stab-security">
+        <div class="settings-section-label" style="padding-top:0;margin-top:0;border-top:none">Rate Limiting</div>
+        <label class="toggle-switch-row">
+          <span class="toggle-switch-label">Rate limiting</span>
+          <div class="toggle-switch">
+            <input type="checkbox" id="input-ratelimit-enabled" checked />
+            <span class="toggle-slider"></span>
+            <span class="toggle-text-on">ON</span>
+            <span class="toggle-text-off">OFF</span>
+          </div>
+        </label>
+        <div style="display:flex;gap:8px">
+          <div class="field-group" style="flex:1;min-width:0">
+            <label>Max Requests</label>
+            <input type="number" id="input-ratelimit-max" value="100" min="1" />
+          </div>
+          <div class="field-group" style="flex:1;min-width:0">
+            <label>Window (seconds)</label>
+            <input type="number" id="input-ratelimit-window" value="60" min="1" />
+          </div>
+        </div>
+
+        <div class="settings-section-label">Replay Protection</div>
+        <label class="toggle-switch-row">
+          <span class="toggle-switch-label">Idempotency enforcement</span>
+          <div class="toggle-switch">
+            <input type="checkbox" id="input-replay-enabled" checked />
+            <span class="toggle-slider"></span>
+            <span class="toggle-text-on">ON</span>
+            <span class="toggle-text-off">OFF</span>
+          </div>
+        </label>
+        <div class="field-group">
+          <label>Replay TTL (seconds)</label>
+          <input type="number" id="input-replay-ttl" value="300" min="1" />
+        </div>
+
+        <div class="settings-section-label">CORS</div>
+        <div class="field-group">
+          <label>Allowed Origins</label>
+          <input type="text" id="input-cors-origins" placeholder="* (all origins)" value="*" />
+        </div>
+        <div style="font-size:11px;color:var(--muted)">Comma-separated origins, or * for all. e.g. https://app.example.com, https://other.com</div>
+
+        <div class="settings-section-label">Active Protections</div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div class="security-status-row">
+            <span class="security-status-label">Helmet (HTTP security headers)</span>
+            <span class="security-status-badge on">Active</span>
+          </div>
+          <div class="security-status-row">
+            <span class="security-status-label">SSRF protection</span>
+            <span class="security-status-badge on">Active</span>
+          </div>
+          <div class="security-status-row">
+            <span class="security-status-label">Hop-by-hop header stripping</span>
+            <span class="security-status-badge on">Active</span>
+          </div>
+          <div class="security-status-row">
+            <span class="security-status-label">Internal header filtering</span>
+            <span class="security-status-badge on">Active</span>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -631,7 +782,7 @@
       </div>
       <div class="conn-body">
         <div class="conn-row">
-          <span class="conn-label">Base L2</span>
+          <span class="conn-label">Base</span>
           <span class="conn-value" id="label-base">Not connected</span>
         </div>
         <div class="conn-row">
@@ -649,6 +800,7 @@
       <div class="stat-card">
         <div class="stat-label">Revenue</div>
         <div class="stat-value"><span id="stat-usdc" style="color:var(--green)">-</span> <span style="color:var(--green);font-size:14px;font-weight:400">USDC</span></div>
+        <div id="wallet-link" style="margin-top:6px;font-size:11px;display:none"><a id="wallet-link-a" href="#" target="_blank" style="color:var(--muted);text-decoration:none;font-family:var(--mono,monospace)"><svg style="width:12px;height:12px;vertical-align:-1px;margin-right:4px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4z"/></svg><span id="wallet-link-text"></span></a></div>
       </div>
     </div>
 
@@ -693,8 +845,9 @@
             <div><span style="color:var(--text);font-size:16px;font-weight:600;display:block;line-height:36px">Share your gateway URL</span><span style="color:var(--muted);font-size:15px">Agents connect, pay with x402, and get proxied to your API</span></div>
           </div>
         </div>
-        <div style="margin-top:28px">
-          <button class="btn btn-green" style="font-size:16px;padding:12px 24px" onclick="loadDemoSettings()">Load Demo Settings</button>
+        <div style="margin-top:28px;display:flex;gap:12px;flex-wrap:wrap">
+          <button class="btn btn-green" style="font-size:16px;padding:12px 24px" onclick="loadDemoSettings('testnet')">Load Demo (Testnet)</button>
+          <button class="btn btn-green" style="font-size:16px;padding:12px 24px;background:#1a6eff" onclick="loadDemoSettings('mainnet')">Load Demo (Mainnet)</button>
         </div>
       </div>
     </div>
@@ -816,6 +969,11 @@
             <div class="debug-card-desc">Route to dead upstream &rarr; 502 with UPSTREAM_ERROR_NO_CHARGE &mdash; agent not billed</div>
             <div class="debug-result"></div>
           </div>
+          <div class="debug-card" id="debug-e2e-real-payment">
+            <div class="debug-card-header"><span class="debug-card-title">Real Payment ($0.01 USDC)</span><button class="btn btn-sm" onclick="testE2eRealPayment()">Run</button></div>
+            <div class="debug-card-desc">Real $0.01 USDC payment on Base via x402 &mdash; creates temp route, pays, verifies receipt + on-chain tx</div>
+            <div class="debug-result"></div>
+          </div>
         </div>
       </div>
 
@@ -867,7 +1025,7 @@
 
       <div class="debug-section collapsed" data-section="payment">
         <div class="debug-section-header" onclick="toggleSection(this)">
-          <h3 class="debug-section-title">x402 Payment <span class="debug-section-status" id="ss-payment"></span></h3>
+          <h3 class="debug-section-title">x402 Payment &amp; Facilitator <span class="debug-section-status" id="ss-payment"></span></h3>
           <div style="display:flex;gap:6px;align-items:center">
             <button class="btn btn-sm" onclick="event.stopPropagation();runSection('payment')">Run Section</button>
 
@@ -884,47 +1042,45 @@
             <div class="debug-card-desc">402 response includes valid x402 payment requirements (payTo, amount, network)</div>
             <div class="debug-result"></div>
           </div>
-        </div>
-      </div>
-
-      <div class="debug-section collapsed" data-section="x402">
-        <div class="debug-section-header" onclick="toggleSection(this)">
-          <h3 class="debug-section-title">Security Checks <span class="debug-section-status" id="ss-x402"></span></h3>
-          <div style="display:flex;gap:6px;align-items:center">
-            <button class="btn btn-sm" onclick="event.stopPropagation();runSection('x402')">Run Section</button>
-
-          </div>
-        </div>
-        <div class="debug-cards">
-          <div class="debug-card" id="debug-x402-probe">
-            <div class="debug-card-header"><span class="debug-card-title">Block x402 Upstream</span><button class="btn btn-sm" onclick="testX402Probe()">Run</button></div>
-            <div class="debug-card-desc">POST /admin/routes with a known x402 upstream &mdash; expect 400 X402_UPSTREAM_BLOCKED</div>
+          <div class="debug-card" id="debug-payment-facilitator">
+            <div class="debug-card-header"><span class="debug-card-title">x402 Facilitator</span><button class="btn btn-sm" onclick="testFacilitator()">Run</button></div>
+            <div class="debug-card-desc">Verify x402 facilitator is reachable and returns supported payment schemes</div>
             <div class="debug-result"></div>
           </div>
-          <div class="debug-card" id="debug-x402-skip">
-            <div class="debug-card-header"><span class="debug-card-title">Probe Opt-out Check</span><button class="btn btn-sm" onclick="testX402Skip()">Run</button></div>
-            <div class="debug-card-desc">RT_SKIP_X402_PROBE env var &mdash; should be unset (probe active)</div>
-            <div class="debug-result"></div>
-          </div>
-          <div class="debug-card" id="debug-ssrf-blocked">
-            <div class="debug-card-header"><span class="debug-card-title">SSRF Protection</span><button class="btn btn-sm" onclick="testSsrfBlocked()">Run</button></div>
-            <div class="debug-card-desc">Register route to private IP (10.0.0.1) &mdash; expect 400 SSRF_BLOCKED</div>
-            <div class="debug-result"></div>
-          </div>
-        </div>
-      </div>
-
-      <div class="debug-section collapsed" data-section="idempotency">
-        <div class="debug-section-header" onclick="toggleSection(this)">
-          <h3 class="debug-section-title">Idempotency <span class="debug-section-status" id="ss-idempotency"></span></h3>
-          <div style="display:flex;gap:6px;align-items:center">
-            <button class="btn btn-sm" onclick="event.stopPropagation();runSection('idempotency')">Run Section</button>
-          </div>
-        </div>
-        <div class="debug-cards">
           <div class="debug-card" id="debug-idempotency">
             <div class="debug-card-header"><span class="debug-card-title">Replay Detection</span><button class="btn btn-sm" onclick="testIdempotency()">Run</button></div>
             <div class="debug-card-desc">Same request 2x with X-Idempotency-Key &mdash; 2nd returns 409</div>
+            <div class="debug-result"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="debug-section collapsed" data-section="skale">
+        <div class="debug-section-header" onclick="toggleSection(this)">
+          <h3 class="debug-section-title">SKALE / BITE (ENCRYPTION) <span class="debug-section-status" id="ss-skale"></span></h3>
+          <div style="display:flex;gap:6px;align-items:center">
+            <button class="btn btn-sm" onclick="event.stopPropagation();runSection('skale')">Run Section</button>
+          </div>
+        </div>
+        <div class="debug-cards">
+          <div class="debug-card" id="debug-skale-rpc">
+            <div class="debug-card-header"><span class="debug-card-title">RPC Connection</span><button class="btn btn-sm" onclick="testSkaleRpc()">Run</button></div>
+            <div class="debug-card-desc">eth_chainId via /rpc-proxy &mdash; returns chain ID</div>
+            <div class="debug-result"></div>
+          </div>
+          <div class="debug-card" id="debug-skale-block">
+            <div class="debug-card-header"><span class="debug-card-title">Latest Block</span><button class="btn btn-sm" onclick="testSkaleBlock()">Run</button></div>
+            <div class="debug-card-desc">eth_blockNumber via /rpc-proxy &mdash; returns block number</div>
+            <div class="debug-result"></div>
+          </div>
+          <div class="debug-card" id="debug-bite-committee">
+            <div class="debug-card-header"><span class="debug-card-title">BITE Committee</span><button class="btn btn-sm" onclick="testBiteCommittee()">Run</button></div>
+            <div class="debug-card-desc">bite_getCommitteesInfo &mdash; verify threshold encryption is available</div>
+            <div class="debug-result"></div>
+          </div>
+          <div class="debug-card" id="debug-bite-contract">
+            <div class="debug-card-header"><span class="debug-card-title">BITE Contract</span><button class="btn btn-sm" onclick="testBiteContract()">Run</button></div>
+            <div class="debug-card-desc">eth_getCode + getIntent &mdash; verify IntentStore contract is deployed and callable</div>
             <div class="debug-result"></div>
           </div>
         </div>
@@ -977,32 +1133,28 @@
         </div>
       </div>
 
-      <div class="debug-section collapsed" data-section="skale">
+      <div class="debug-section collapsed" data-section="x402">
         <div class="debug-section-header" onclick="toggleSection(this)">
-          <h3 class="debug-section-title">SKALE / BITE <span class="debug-section-status" id="ss-skale"></span></h3>
+          <h3 class="debug-section-title">Security Checks <span class="debug-section-status" id="ss-x402"></span></h3>
           <div style="display:flex;gap:6px;align-items:center">
-            <button class="btn btn-sm" onclick="event.stopPropagation();runSection('skale')">Run Section</button>
+            <button class="btn btn-sm" onclick="event.stopPropagation();runSection('x402')">Run Section</button>
+
           </div>
         </div>
         <div class="debug-cards">
-          <div class="debug-card" id="debug-skale-rpc">
-            <div class="debug-card-header"><span class="debug-card-title">RPC Connection</span><button class="btn btn-sm" onclick="testSkaleRpc()">Run</button></div>
-            <div class="debug-card-desc">eth_chainId via /rpc-proxy &mdash; returns chain ID</div>
+          <div class="debug-card" id="debug-x402-probe">
+            <div class="debug-card-header"><span class="debug-card-title">Block x402 Upstream</span><button class="btn btn-sm" onclick="testX402Probe()">Run</button></div>
+            <div class="debug-card-desc">POST /admin/routes with a known x402 upstream &mdash; expect 400 X402_UPSTREAM_BLOCKED</div>
             <div class="debug-result"></div>
           </div>
-          <div class="debug-card" id="debug-skale-block">
-            <div class="debug-card-header"><span class="debug-card-title">Latest Block</span><button class="btn btn-sm" onclick="testSkaleBlock()">Run</button></div>
-            <div class="debug-card-desc">eth_blockNumber via /rpc-proxy &mdash; returns block number</div>
+          <div class="debug-card" id="debug-x402-skip">
+            <div class="debug-card-header"><span class="debug-card-title">Probe Opt-out Check</span><button class="btn btn-sm" onclick="testX402Skip()">Run</button></div>
+            <div class="debug-card-desc">RT_SKIP_X402_PROBE env var &mdash; should be unset (probe active)</div>
             <div class="debug-result"></div>
           </div>
-          <div class="debug-card" id="debug-bite-committee">
-            <div class="debug-card-header"><span class="debug-card-title">BITE Committee</span><button class="btn btn-sm" onclick="testBiteCommittee()">Run</button></div>
-            <div class="debug-card-desc">bite_getCommitteesInfo &mdash; verify threshold encryption is available</div>
-            <div class="debug-result"></div>
-          </div>
-          <div class="debug-card" id="debug-bite-contract">
-            <div class="debug-card-header"><span class="debug-card-title">BITE Contract</span><button class="btn btn-sm" onclick="testBiteContract()">Run</button></div>
-            <div class="debug-card-desc">eth_getCode + getIntent &mdash; verify IntentStore contract is deployed and callable</div>
+          <div class="debug-card" id="debug-ssrf-blocked">
+            <div class="debug-card-header"><span class="debug-card-title">SSRF Protection</span><button class="btn btn-sm" onclick="testSsrfBlocked()">Run</button></div>
+            <div class="debug-card-desc">Register route to private IP (10.0.0.1) &mdash; expect 400 SSRF_BLOCKED</div>
             <div class="debug-result"></div>
           </div>
         </div>
@@ -1010,7 +1162,7 @@
 
       <div class="debug-section collapsed" data-section="blacklist">
         <div class="debug-section-header" onclick="toggleSection(this)">
-          <h3 class="debug-section-title">Agent Access Control <span class="debug-section-status" id="ss-blacklist"></span></h3>
+          <h3 class="debug-section-title">Agent Access Control (Blacklist / ERC-8004) <span class="debug-section-status" id="ss-blacklist"></span></h3>
           <div style="display:flex;gap:6px;align-items:center">
             <button class="btn btn-sm" onclick="event.stopPropagation();runSection('blacklist')">Run Section</button>
 
@@ -1032,17 +1184,6 @@
             <div class="debug-card-desc">Add agent to blacklist, request &mdash; 403 AGENT_BLOCKED, then remove</div>
             <div class="debug-result"></div>
           </div>
-        </div>
-      </div>
-
-      <div class="debug-section collapsed" data-section="erc8004">
-        <div class="debug-section-header" onclick="toggleSection(this)">
-          <h3 class="debug-section-title">Agent Reputation (ERC-8004) <span class="debug-section-status" id="ss-erc8004"></span></h3>
-          <div style="display:flex;gap:6px;align-items:center">
-            <button class="btn btn-sm" onclick="event.stopPropagation();runSection('erc8004')">Run Section</button>
-          </div>
-        </div>
-        <div class="debug-cards">
           <div class="debug-card" id="debug-erc8004-query">
             <div class="debug-card-header"><span class="debug-card-title">Contract Query</span><button class="btn btn-sm" onclick="testErc8004Query()">Run</button></div>
             <div class="debug-card-desc">GET /admin/reputation/1 &mdash; query on-chain reputation from registry contract</div>
@@ -1063,7 +1204,7 @@
 
       <div class="debug-section collapsed" data-section="receipts">
         <div class="debug-section-header" onclick="toggleSection(this)">
-          <h3 class="debug-section-title">Receipts <span class="debug-section-status" id="ss-receipts"></span></h3>
+          <h3 class="debug-section-title">Transaction Receipts <span class="debug-section-status" id="ss-receipts"></span></h3>
           <div style="display:flex;gap:6px;align-items:center">
             <button class="btn btn-sm" onclick="event.stopPropagation();runSection('receipts')">Run Section</button>
 
@@ -1112,7 +1253,7 @@
 
       <div class="debug-section collapsed" data-section="cdp">
         <div class="debug-section-header" onclick="toggleSection(this)">
-          <h3 class="debug-section-title">CDP (Coinbase Developer Platform) <span class="debug-section-status" id="ss-cdp"></span></h3>
+          <h3 class="debug-section-title">Coinbase Developer Platform (CDP) <span class="debug-section-status" id="ss-cdp"></span></h3>
           <div style="display:flex;gap:6px;align-items:center">
             <button class="btn btn-sm" onclick="event.stopPropagation();runSection('cdp')">Run Section</button>
 
@@ -1322,7 +1463,24 @@ async function testCdpConnection() {
   });
   document.getElementById('input-skale-network').addEventListener('change', () => {
     localStorage.removeItem('rt-skale-connected');
+    const skaleDefaults = {
+      'base-sepolia-testnet': { rpc: 'https://base-sepolia-testnet.skalenodes.com/v1/base-testnet', contract: '0x64687C88C767D9a504c392C07393980af2879dC1' },
+      'base-mainnet':         { rpc: 'https://skale-base.skalenodes.com/v1/base',                   contract: '0x5237c33Ec0af68120B2dDEC5c668681d6F8ABD1E' },
+    };
+    const net = document.getElementById('input-skale-network').value;
+    const defaults = skaleDefaults[net];
+    if (defaults) {
+      document.getElementById('input-skale-rpc').value = defaults.rpc;
+      document.getElementById('input-skale-contract').value = defaults.contract;
+    }
     saveDashboardConfig();
+  });
+  // Security tab inputs
+  ['input-ratelimit-max', 'input-ratelimit-window', 'input-replay-ttl', 'input-cors-origins'].forEach(id => {
+    document.getElementById(id).addEventListener('input', debouncedSave);
+  });
+  ['input-ratelimit-enabled', 'input-replay-enabled'].forEach(id => {
+    document.getElementById(id).addEventListener('change', saveDashboardConfig);
   });
 
   // Load dashboard config from gateway
@@ -1360,7 +1518,30 @@ async function loadDashboardConfig() {
     document.getElementById('input-skale-contract').value = dashboardConfig.skaleBiteContract || '';
     document.getElementById('input-api-key').value = dashboardConfig.apiKey || '';
     document.getElementById('input-api-base-url').value = dashboardConfig.apiBaseUrl || gatewayUrl;
+    document.getElementById('input-ap2-enabled').checked = dashboardConfig.ap2Enabled !== false;
+
+    document.getElementById('input-erc8004-rpc').value = dashboardConfig.erc8004RpcUrl || 'https://sepolia.base.org';
+    document.getElementById('input-erc8004-contract').value = dashboardConfig.erc8004Contract || '0x8004B663056A597Dffe9eCcC1965A193B7388713';
+    document.getElementById('input-erc8004-min-score').value = dashboardConfig.erc8004MinScore || '20';
+    document.getElementById('input-ratelimit-enabled').checked = dashboardConfig.rateLimitEnabled !== false;
+    document.getElementById('input-ratelimit-max').value = dashboardConfig.rateLimitMax || '100';
+    document.getElementById('input-ratelimit-window').value = dashboardConfig.rateLimitWindow || '60';
+    document.getElementById('input-replay-enabled').checked = dashboardConfig.replayEnabled !== false;
+    document.getElementById('input-replay-ttl').value = dashboardConfig.replayTtl || '300';
+    document.getElementById('input-cors-origins').value = dashboardConfig.corsOrigins || '*';
     updateNetworkLabels();
+    updateWalletLink();
+    // Seed a demo blacklist entry if empty, then load
+    try {
+      const blr = await api('/admin/blacklist');
+      if (blr.ok) {
+        const bld = await blr.json();
+        if (!bld.blacklist || !bld.blacklist.length) {
+          await api('/admin/blacklist', { method: 'POST', body: JSON.stringify({ address: '0x7a3f9E04b2C8fD1263c5A29fBe44894E3ecB5b60' }) });
+        }
+      }
+    } catch {}
+    loadBlacklist();
     // Auto-verify SKALE connection on load if RPC URL is configured
     if (dashboardConfig.skaleRpcUrl) {
       autoVerifySkale(dashboardConfig.skaleNetwork, dashboardConfig.skaleRpcUrl);
@@ -1393,6 +1574,17 @@ async function saveDashboardConfig() {
     skaleBiteContract: document.getElementById('input-skale-contract').value.trim(),
     apiKey: document.getElementById('input-api-key').value.trim(),
     apiBaseUrl: document.getElementById('input-api-base-url').value.trim(),
+    ap2Enabled: document.getElementById('input-ap2-enabled').checked,
+
+    erc8004RpcUrl: document.getElementById('input-erc8004-rpc').value.trim(),
+    erc8004Contract: document.getElementById('input-erc8004-contract').value.trim(),
+    erc8004MinScore: document.getElementById('input-erc8004-min-score').value.trim() || '20',
+    rateLimitEnabled: document.getElementById('input-ratelimit-enabled').checked,
+    rateLimitMax: document.getElementById('input-ratelimit-max').value.trim() || '100',
+    rateLimitWindow: document.getElementById('input-ratelimit-window').value.trim() || '60',
+    replayEnabled: document.getElementById('input-replay-enabled').checked,
+    replayTtl: document.getElementById('input-replay-ttl').value.trim() || '300',
+    corsOrigins: document.getElementById('input-cors-origins').value.trim() || '*',
     routeGroups: routeGroups,
   };
   try {
@@ -1403,6 +1595,7 @@ async function saveDashboardConfig() {
     if (r.ok) {
       dashboardConfig = (await r.json()).config;
       updateNetworkLabels();
+      updateWalletLink();
     }
   } catch {}
 }
@@ -1413,7 +1606,7 @@ function updateNetworkLabels() {
   const baseLabel = document.getElementById('label-base');
   const skaleLabel = document.getElementById('label-skale');
   const baseIsMainnet = baseNet === 'base';
-  const skaleIsMainnet = skaleNet === 'mainnet';
+  const skaleIsMainnet = skaleNet === 'mainnet' || skaleNet === 'base-mainnet';
   const baseNetName = baseIsMainnet ? 'Mainnet' : 'Testnet';
   const skaleNetName = skaleIsMainnet ? 'Mainnet' : 'Testnet';
 
@@ -1425,17 +1618,98 @@ function updateNetworkLabels() {
 
   const cdpLabel = document.getElementById('label-cdp');
   const cdpConfigured = envStatus.cdpApiKeyId && envStatus.cdpApiKeySecret;
-  cdpLabel.textContent = cdpConfigured ? 'Connected' : 'Not configured';
+  cdpLabel.textContent = cdpConfigured ? 'Connected (' + baseNetName + ')' : 'Not configured';
   cdpLabel.style.color = cdpConfigured ? 'var(--green)' : 'var(--orange)';
+
+  // Show CDP USDC balance from demo config or live fetch
+  if (cdpConfigured && dashboardConfig?.payToAddress) {
+    const demoCdp = localStorage.getItem('rt-cdp-balance');
+    if (demoCdp) {
+      cdpLabel.innerHTML = 'Connected (' + baseNetName + ')<br><span style="color:#8b949e">' + demoCdp + ' USDC</span>';
+    } else {
+      fetchCdpBalance(dashboardConfig.payToAddress, baseIsMainnet).then(bal => {
+        if (bal !== null) {
+          cdpLabel.innerHTML = 'Connected (' + baseNetName + ')<br><span style="color:#8b949e">' + bal + ' USDC</span>';
+        }
+      });
+    }
+  }
 
   skaleLabel.textContent = skaleConnected ? 'Connected (' + skaleNetName + ')' : 'Not connected';
   skaleLabel.style.color = skaleConnected ? 'var(--green)' : 'var(--orange)';
+
+  // Show SKALE CREDITS balance from demo config or live fetch
+  if (skaleConnected) {
+    const demoSkale = localStorage.getItem('rt-skale-balance');
+    if (demoSkale) {
+      skaleLabel.innerHTML = 'Connected (' + skaleNetName + ')<br><span style="color:#8b949e">' + demoSkale + ' CREDITS</span>';
+    } else {
+      fetchSkaleBalance().then(bal => {
+        if (bal !== null) {
+          skaleLabel.innerHTML = 'Connected (' + skaleNetName + ')<br><span style="color:#8b949e">' + bal + ' CREDITS</span>';
+        }
+      });
+    }
+  }
 
   const platformDot = document.getElementById('platform-dot');
   if (platformDot) {
     const allGreen = baseConnected && cdpConfigured && skaleConnected;
     platformDot.className = 'conn-dot ' + (allGreen ? 'online' : 'loading');
   }
+}
+
+function updateWalletLink() {
+  const addr = dashboardConfig?.payToAddress;
+  const net = dashboardConfig?.baseNetwork;
+  const container = document.getElementById('wallet-link');
+  const anchor = document.getElementById('wallet-link-a');
+  if (!container || !anchor || !addr) return;
+  const explorer = net === 'base' ? 'https://basescan.org' : 'https://sepolia.basescan.org';
+  const short = addr.slice(0, 6) + '...' + addr.slice(-4);
+  anchor.href = explorer + '/address/' + addr;
+  document.getElementById('wallet-link-text').textContent = short;
+  container.style.display = 'block';
+}
+
+async function fetchSkaleBalance() {
+  try {
+    const r = await api('/admin/skale/status');
+    if (!r.ok) return null;
+    const d = await r.json();
+    return d.balanceFormatted || null;
+  } catch { return null; }
+}
+
+async function fetchCdpBalance(address, isMainnet) {
+  const rpcUrl = isMainnet
+    ? 'https://mainnet.base.org'
+    : 'https://sepolia.base.org';
+  // USDC contract addresses on Base
+  const usdcContract = isMainnet
+    ? '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'
+    : '0x036CbD53842c5426634e7929541eC2318f3dCF7e';
+  // balanceOf(address) selector = 0x70a08231, padded address
+  const paddedAddr = '000000000000000000000000' + address.replace('0x', '');
+  const data = '0x70a08231' + paddedAddr;
+  try {
+    const r = await fetch('/rpc-proxy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        rpcUrl,
+        body: { jsonrpc: '2.0', method: 'eth_call', params: [{ to: usdcContract, data }, 'latest'], id: 1 }
+      }),
+    });
+    const d = await r.json();
+    if (d.result) {
+      const raw = BigInt(d.result);
+      const whole = raw / 1000000n;
+      const frac = raw % 1000000n;
+      return whole + '.' + frac.toString().padStart(6, '0').slice(0, 2);
+    }
+    return null;
+  } catch { return null; }
 }
 updateNetworkLabels();
 
@@ -1449,6 +1723,7 @@ function switchSettingsTab(id) {
   document.querySelectorAll('.settings-tab-panel').forEach(p => p.classList.remove('active'));
   document.querySelector(`.settings-tab[onclick*="'${id}'"]`).classList.add('active');
   document.getElementById('stab-' + id).classList.add('active');
+  if (id === 'access') loadBlacklist();
 }
 
 async function testWallet() {
@@ -1511,6 +1786,91 @@ async function testSkale() {
     }
   } catch (e) {
     el.textContent = `Failed to connect: ${e.message}`;
+    el.style.color = 'var(--red)';
+  }
+}
+
+// ── Access Control settings ──────────────────────────────────────────
+let blacklistExpanded = false;
+
+async function loadBlacklist() {
+  const summary = document.getElementById('blacklist-summary');
+  const list = document.getElementById('blacklist-list');
+  try {
+    const r = await api('/admin/blacklist');
+    const d = await r.json();
+    const items = d.blacklist || [];
+    document.getElementById('blacklist-count').textContent = items.length;
+    if (!items.length) {
+      summary.style.display = 'flex';
+      document.getElementById('blacklist-count').parentElement.innerHTML = '<span style="color:var(--muted)">No blocked agents</span>';
+      document.getElementById('blacklist-toggle-btn').style.display = 'none';
+      list.style.display = 'none';
+      return;
+    }
+    summary.style.display = 'flex';
+    document.getElementById('blacklist-toggle-btn').style.display = '';
+    list.innerHTML = items.map(addr =>
+      `<div style="display:flex;align-items:center;justify-content:space-between;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:13px;font-family:var(--mono,monospace)">` +
+      `<span style="color:var(--text);overflow:hidden;text-overflow:ellipsis">${addr}</span>` +
+      `<button style="background:none;border:none;color:var(--red);cursor:pointer;font-size:16px;padding:0 4px;line-height:1" onclick="removeFromBlacklist('${addr}')" title="Remove">&times;</button></div>`
+    ).join('');
+    renderBlacklistToggle();
+  } catch (e) {
+    summary.style.display = 'flex';
+    document.getElementById('blacklist-count').parentElement.innerHTML = `<span style="color:var(--red)">Error: ${e.message}</span>`;
+    list.style.display = 'none';
+  }
+}
+
+function toggleBlacklistExpanded() {
+  blacklistExpanded = !blacklistExpanded;
+  renderBlacklistToggle();
+}
+
+function renderBlacklistToggle() {
+  const list = document.getElementById('blacklist-list');
+  const btn = document.getElementById('blacklist-toggle-btn');
+  list.style.display = blacklistExpanded ? 'flex' : 'none';
+  btn.textContent = blacklistExpanded ? 'Hide' : 'View all';
+}
+
+async function addToBlacklist() {
+  const input = document.getElementById('input-blacklist-address');
+  const addr = input.value.trim();
+  if (!addr) return;
+  try {
+    const r = await api('/admin/blacklist', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ address: addr }) });
+    if (!r.ok) { const d = await r.json(); alert(d.error || 'Failed'); return; }
+    input.value = '';
+    loadBlacklist();
+  } catch (e) { alert('Error: ' + e.message); }
+}
+
+async function removeFromBlacklist(addr) {
+  try {
+    await api('/admin/blacklist/' + encodeURIComponent(addr), { method: 'DELETE' });
+    loadBlacklist();
+  } catch (e) { alert('Error: ' + e.message); }
+}
+
+async function testErc8004Settings() {
+  const el = document.getElementById('test-erc8004-settings-result');
+  el.textContent = 'Checking...';
+  el.style.color = 'var(--muted)';
+  try {
+    const r = await api('/admin/reputation/1');
+    const d = await r.json();
+    if (r.status === 400) {
+      el.textContent = d.error || 'ERC-8004 not configured';
+      el.style.color = 'var(--orange)';
+      return;
+    }
+    if (!r.ok) { el.textContent = d.error || 'Request failed'; el.style.color = 'var(--red)'; return; }
+    el.innerHTML = `Connected &mdash; Agent #1: score=${d.score ?? 'N/A'}, count=${d.count ?? 0}, min_score=${d.min_score}`;
+    el.style.color = 'var(--green)';
+  } catch (e) {
+    el.textContent = `Error: ${e.message}`;
     el.style.color = 'var(--red)';
   }
 }
@@ -1781,6 +2141,12 @@ function hideGlobalPrice() {
   document.getElementById('btn-global-price').style.display = '';
 }
 
+const FREE_ROUTE_PATTERN = /\/(health|heartbeat|ping|status|ready|alive|readiness|liveness)(\/|$)/i;
+
+function isFreeRoute(route) {
+  return FREE_ROUTE_PATTERN.test(route.path) || FREE_ROUTE_PATTERN.test(route.tool_id);
+}
+
 async function applyGlobalPrice() {
   const price = document.getElementById('input-global-price').value.trim();
   if (!price || isNaN(parseFloat(price))) return;
@@ -1790,9 +2156,10 @@ async function applyGlobalPrice() {
     const d = await r.json();
     for (const route of d.routes) {
       if (route.restricted) continue;
+      const routePrice = isFreeRoute(route) ? '0.00' : price;
       await api('/admin/routes/' + encodeURIComponent(route.tool_id), {
         method: 'PUT',
-        body: JSON.stringify({ price_usdc: price }),
+        body: JSON.stringify({ price_usdc: routePrice }),
       });
     }
     hideGlobalPrice();
@@ -1815,18 +2182,48 @@ async function removeAllRoutes() {
 }
 
 async function generateDocs() {
-  try {
-    const r = await api('/admin/docs/openapi');
-    if (!r.ok) return;
-    const gwUrl = gatewayUrl || 'http://localhost:4402';
-    window.open(gwUrl + '/docs', '_blank');
-  } catch {}
+  window.open('/docs', '_blank');
 }
 
 // ── Demo Settings ────────────────────────────────────────────────────
-async function loadDemoSettings() {
+const demoPresets = {
+  testnet: {
+    wallet: '0x1234567890abcdef1234567890abcdef12345678',
+    baseNetwork: 'base-sepolia',
+    skaleNetwork: 'base-sepolia-testnet',
+    skaleRpc: 'https://base-sepolia-testnet.skalenodes.com/v1/base-testnet',
+    skaleContract: '0x64687C88C767D9a504c392C07393980af2879dC1',
+    skaleBalance: '39.823',
+    cdpBalance: '3.00',
+
+    erc8004Rpc: 'https://sepolia.base.org',
+    erc8004Contract: '0x8004B663056A597Dffe9eCcC1965A193B7388713',
+    erc8004MinScore: '20',
+    rateLimitMax: '100', rateLimitWindow: '60',
+    replayTtl: '300', corsOrigins: '*',
+  },
+  mainnet: {
+    wallet: '0x5F80A88CbbeE1cd9905B89B45dd67c1225ace628',
+    baseNetwork: 'base',
+    skaleNetwork: 'base-mainnet',
+    skaleRpc: 'https://skale-base.skalenodes.com/v1/base',
+    skaleContract: '0x5237c33Ec0af68120B2dDEC5c668681d6F8ABD1E',
+    skaleBalance: '39.823',
+    cdpBalance: '3.00',
+
+    erc8004Rpc: 'https://mainnet.base.org',
+    erc8004Contract: '0x8004BAa17C55a88189AE136b182e5fdA19dE9b63',
+    erc8004MinScore: '20',
+    rateLimitMax: '200', rateLimitWindow: '60',
+    replayTtl: '300', corsOrigins: '*',
+  },
+};
+
+async function loadDemoSettings(network = 'testnet') {
+  const preset = demoPresets[network] || demoPresets.testnet;
+
   // Show loading state
-  const btn = document.querySelector('[onclick="loadDemoSettings()"]');
+  const btn = document.querySelector(`[onclick="loadDemoSettings('${network}')"]`);
   const origText = btn?.textContent;
   if (btn) { btn.textContent = 'Loading...'; btn.disabled = true; }
 
@@ -1840,26 +2237,44 @@ async function loadDemoSettings() {
     { method: 'GET', path: '/api/v1/internal/restricted', tool_id: 'restricted', price_usdc: '0.00', description: 'Restricted test endpoint (disabled)', restricted: true, provider: { provider_id: 'acme-data', backend_url: 'https://api.acme.com', auth: { header: 'Authorization', value: 'Bearer ' + demoKey } } },
   ];
 
-  // Add demo routes in parallel
-  await Promise.allSettled(demoRoutes.map(route =>
-    api('/admin/routes', { method: 'POST', body: JSON.stringify(route) })
-  ));
+  // Add demo routes + a demo blacklist entry in parallel
+  await Promise.allSettled([
+    ...demoRoutes.map(route =>
+      api('/admin/routes', { method: 'POST', body: JSON.stringify(route) })
+    ),
+    api('/admin/blacklist', { method: 'POST', body: JSON.stringify({ address: '0xdead000000000000000000000000000000000bad' }) }),
+    api('/admin/blacklist', { method: 'POST', body: JSON.stringify({ address: '0x7a3f9E04b2C8fD1263c5A29fBe44894E3ecB5b60' }) }),
+  ]);
 
-  // Set demo config
+  // Set demo config from preset
   document.getElementById('input-api-base-url').value = 'http://localhost:4402';
   document.getElementById('input-api-key').value = demoKey;
-  document.getElementById('input-wallet-address').value = '0x1234567890abcdef1234567890abcdef12345678';
-  document.getElementById('input-base-network').value = 'base-sepolia';
-  document.getElementById('input-skale-network').value = 'base-sepolia-testnet';
-  document.getElementById('input-skale-rpc').value = 'https://base-sepolia-testnet.skalenodes.com/v1/base-testnet';
-  document.getElementById('input-skale-contract').value = '0x64687C88C767D9a504c392C07393980af2879dC1';
+  document.getElementById('input-wallet-address').value = preset.wallet;
+  document.getElementById('input-base-network').value = preset.baseNetwork;
+  document.getElementById('input-skale-network').value = preset.skaleNetwork;
+  document.getElementById('input-skale-rpc').value = preset.skaleRpc;
+  document.getElementById('input-skale-contract').value = preset.skaleContract;
+  document.getElementById('input-ap2-enabled').checked = preset.ap2Enabled || false;
+
+  document.getElementById('input-erc8004-rpc').value = preset.erc8004Rpc || '';
+  document.getElementById('input-erc8004-contract').value = preset.erc8004Contract || '';
+  document.getElementById('input-erc8004-min-score').value = preset.erc8004MinScore || '20';
+  document.getElementById('input-ratelimit-enabled').checked = true;
+  document.getElementById('input-ratelimit-max').value = preset.rateLimitMax || '100';
+  document.getElementById('input-ratelimit-window').value = preset.rateLimitWindow || '60';
+  document.getElementById('input-replay-enabled').checked = true;
+  document.getElementById('input-replay-ttl').value = preset.replayTtl || '300';
+  document.getElementById('input-cors-origins').value = preset.corsOrigins || '*';
   await saveDashboardConfig();
 
   // Mark connections as active (demo settings are known-good)
-  localStorage.setItem('rt-base-connected', 'base-sepolia');
-  localStorage.setItem('rt-skale-connected', 'base-sepolia-testnet|https://base-sepolia-testnet.skalenodes.com/v1/base-testnet');
+  localStorage.setItem('rt-base-connected', preset.baseNetwork);
+  localStorage.setItem('rt-skale-connected', preset.skaleNetwork + '|' + preset.skaleRpc);
+  if (preset.skaleBalance) localStorage.setItem('rt-skale-balance', preset.skaleBalance);
+  if (preset.cdpBalance) localStorage.setItem('rt-cdp-balance', preset.cdpBalance);
 
   await loadRoutes();
+  loadBlacklist();
   refreshHealth();
   updateNetworkLabels();
   switchTab('routes');
@@ -2153,8 +2568,9 @@ function setTestResult(id, status, body) {
   const card = document.getElementById('debug-' + id);
   card.className = 'debug-card ' + status;
   const bodyStr = typeof body === 'object' ? JSON.stringify(body, null, 2) : String(body);
+  const escaped = esc(bodyStr).replace(/"(https?:\/\/[^"]+)"/g, '"<a href="$1" target="_blank" style="color:var(--blue,#58a6ff)">$1</a>"');
   card.querySelector('.debug-result').innerHTML =
-    `<span class="debug-status-badge ${status}">${status.toUpperCase()}</span><pre class="debug-body">${esc(bodyStr)}</pre>`;
+    `<span class="debug-status-badge ${status}">${status.toUpperCase()}</span><pre class="debug-body">${escaped}</pre>`;
   debugCounts[status] = (debugCounts[status] || 0) + 1;
   updateDebugSummary();
   updateSectionStatus(card);
@@ -2259,21 +2675,19 @@ function updateToggleAllLabel() {
 // Each step is either a function (run alone) or an array of functions (run in parallel).
 const debugSections = {
   core:       (r, c) => [[testHealthCheck, () => testRouteMatch(r,c), () => testRouteNotFound(c), () => testRestrictedRoute(r,c), () => testAuth401(r,c), () => testAuthValid(r,c)]],
-  e2e:        (r, c) => [() => testE2ePipeline(c), [testE2eReceipt, testE2eHash], [() => testE2e402(c), testE2eSkale], testBiteLifecycle, () => testUpstreamError(c)],
-  idempotency:(r, c) => [() => testIdempotency(r,c)],
-  payment:    (r, c) => [() => testPaymentRequired(r,c), () => testX402HeaderValid(r,c)],
-  x402:       ()     => [[testX402Probe, testX402Skip, testSsrfBlocked]],
+  e2e:        (r, c) => [() => testE2ePipeline(c), [testE2eReceipt, testE2eHash], [() => testE2e402(c), testE2eSkale], testBiteLifecycle, () => testUpstreamError(c), testE2eRealPayment],
+  payment:    (r, c) => [() => testPaymentRequired(r,c), () => testX402HeaderValid(r,c), () => testFacilitator(c), () => testIdempotency(r,c)],
+  skale:      (r, c) => [[() => testSkaleRpc(c), () => testSkaleBlock(c), () => testBiteCommittee(c), () => testBiteContract(c)]],
   mandate:    (r, c) => [
     [() => testMandateSkipped(r,c), () => testMandateRejected(r,c)],
     [() => testMandateSig(r,c), () => testMandateExpired(r,c), () => testMandateBudget()],
     [() => testIntentBudget(r,c), () => testIntentMerchant(r,c)],
   ],
-  blacklist:  (r, c) => [testBlacklistApi, [() => testAgentAllowed(r,c), () => testAgentBlocked(r,c)]],
-  erc8004:    (r, c) => [testErc8004Query, [() => testErc8004Allowed(r,c), testErc8004Blocked]],
+  x402:       ()     => [[testX402Probe, testX402Skip, testSsrfBlocked]],
+  blacklist:  (r, c) => [testBlacklistApi, [() => testAgentAllowed(r,c), () => testAgentBlocked(r,c)], testErc8004Query, [() => testErc8004Allowed(r,c), testErc8004Blocked]],
   receipts:   (r, c) => [[testReceiptsStats, testReceiptsList, testReceiptsFilter], () => testReceiptIntegrity(r, c)],
   admin:      ()     => [[testAdminConfig, testDashboardConfigTest, testAdminRoutes], [testOpenApiImport, testPriceUpdate]],
   docs:       ()     => [testOpenApiSpec],
-  skale:      (r, c) => [[() => testSkaleRpc(c), () => testSkaleBlock(c), () => testBiteCommittee(c), () => testBiteContract(c)]],
   cdp:        ()     => [[testCdpEnv, testCdpApi]],
 };
 
@@ -2294,7 +2708,7 @@ async function runSection(key) {
 // Batch 2: remaining route-creating sections
 const sectionBatches = [
   ['e2e', 'core', 'admin', 'receipts', 'docs', 'skale', 'cdp'],
-  ['idempotency', 'payment', 'mandate', 'x402', 'blacklist', 'erc8004'],
+  ['payment', 'mandate', 'x402', 'blacklist'],
 ];
 
 async function runAllTests() {
@@ -2422,6 +2836,28 @@ async function testIdempotency(routes, cfg) {
     let d; try { d = JSON.parse(text); } catch { d = text; }
     setTestResult('idempotency', r2.status === 409 ? 'pass' : 'fail', { status: r2.status, key: idemKey, body: d });
   } catch (e) { setTestResult('idempotency', 'fail', { error: e.message }); }
+}
+
+async function testFacilitator(cfg) {
+  if (!cfg) { try { const r = await api('/admin/dashboard-config'); if (r.ok) cfg = await r.json(); } catch {} }
+  setTestRunning('payment-facilitator');
+  try {
+    const r = await api('/admin/facilitator/status');
+    const d = await r.json();
+    if (r.ok && d.ok) {
+      const network = cfg?.baseNetwork === 'base' ? 'eip155:8453' : 'eip155:84532';
+      const supported = d.kinds.filter(k => k.network === network);
+      setTestResult('payment-facilitator', 'pass', {
+        url: d.url,
+        cdpAuth: d.cdpAuth,
+        totalSchemes: d.kinds.length,
+        networkSchemes: supported.length,
+        network,
+      });
+    } else {
+      setTestResult('payment-facilitator', 'fail', d);
+    }
+  } catch (e) { setTestResult('payment-facilitator', 'fail', { error: e.message }); }
 }
 
 async function testPaymentRequired(routes, cfg) {
@@ -3153,6 +3589,13 @@ async function testE2e402(cfg) {
   }
 }
 
+function skaleExplorerUrl() {
+  const net = document.getElementById('input-skale-network').value;
+  if (net === 'base-mainnet') return 'https://skale-base-explorer.skalenodes.com';
+  if (net === 'base-sepolia-testnet') return 'https://base-sepolia-testnet.explorer.testnet.skalenodes.com';
+  return null;
+}
+
 async function testE2eSkale() {
   setTestRunning('e2e-skale');
   try {
@@ -3163,7 +3606,10 @@ async function testE2eSkale() {
     const r = await api('/admin/skale/test-anchor', { method: 'POST', body: JSON.stringify({}) });
     const d = await r.json();
     if (r.ok && d.txHash && d.txHash.startsWith('0x')) {
-      setTestResult('e2e-skale', 'pass', { txHash: d.txHash, intentId: d.intentId });
+      const explorer = skaleExplorerUrl();
+      const result = { txHash: d.txHash, intentId: d.intentId };
+      if (explorer) result.explorer = explorer + '/tx/' + d.txHash;
+      setTestResult('e2e-skale', 'pass', result);
     } else if (d.error && d.error.includes('METHOD_NOT_FOUND')) {
       setTestResult('e2e-skale', 'skip', 'BITE encryption not enabled on this SKALE chain (bite_getCommitteesInfo unavailable)');
     } else {
@@ -3213,13 +3659,16 @@ async function testBiteLifecycle() {
 
     if (read2D.revealed && read2D.data) {
       let parsed; try { parsed = JSON.parse(read2D.data); } catch { parsed = read2D.data; }
-      setTestResult('e2e-bite-lifecycle', 'pass', {
+      const explorer = skaleExplorerUrl();
+      const result = {
         intentId: anchor.intentId,
         txHash: anchor.txHash,
         hiddenBeforeReveal: true,
         revealedAfterMarkPaid: true,
         decryptedPayload: parsed,
-      });
+      };
+      if (explorer) result.explorer = explorer + '/tx/' + anchor.txHash;
+      setTestResult('e2e-bite-lifecycle', 'pass', result);
     } else {
       setTestResult('e2e-bite-lifecycle', 'fail', { step: 'read-after-reveal', note: 'Data not revealed after markPaid', data: read2D });
     }
@@ -3266,6 +3715,49 @@ async function testUpstreamError(cfg) {
   } catch (e) {
     try { await api('/admin/routes/__e2e_dead_upstream__', { method: 'DELETE' }); } catch {}
     setTestResult('e2e-upstream-error', 'fail', { error: e.message });
+  }
+}
+
+async function testE2eRealPayment() {
+  setTestRunning('e2e-real-payment');
+  try {
+    const r = await api('/admin/e2e/payment', { method: 'POST', body: JSON.stringify({}) });
+    const text = await r.text();
+    let d;
+    try { d = JSON.parse(text); } catch {
+      setTestResult('e2e-real-payment', 'fail', {
+        error: `Gateway returned non-JSON (HTTP ${r.status}) — restart the gateway after building`,
+        hint: 'Run /restart or rebuild + restart the gateway process',
+        body: text.slice(0, 200),
+      });
+      return;
+    }
+    if (d.skip) {
+      const skipData = { reason: d.reason || 'Skipped' };
+      if (d.account) skipData.account = d.account;
+      if (d.network) skipData.network = d.network;
+      if (d.balance != null) skipData.balance_usdc = d.balance;
+      setTestResult('e2e-real-payment', 'skip', skipData);
+      return;
+    }
+    if (!r.ok || !d.ok) {
+      setTestResult('e2e-real-payment', 'fail', d);
+      return;
+    }
+    setTestResult('e2e-real-payment', 'pass', {
+      account: d.account,
+      network: d.network,
+      balance_before: d.balance_before,
+      balance_after: d.balance_after,
+      spent: d.spent,
+      txHash: d.txHash,
+      explorer: d.explorer,
+      receipt_outcome: d.receipt?.outcome,
+      receipt_price: d.receipt?.price_usdc,
+      elapsed_ms: d.elapsed,
+    });
+  } catch (e) {
+    setTestResult('e2e-real-payment', 'fail', { error: e.message });
   }
 }
 
