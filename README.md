@@ -264,6 +264,8 @@ See **[CHANGELOG.md](CHANGELOG.md)** for a detailed list of changes in each rele
   <img src="https://contrib.rocks/image?repo=RequestTap/RequestTap-Router" />
 </a>
 
+- [PinneD](https://github.com/mikevokes)
+
 ## Website
 
 [RequestTap.ai](https://RequestTap.ai)
