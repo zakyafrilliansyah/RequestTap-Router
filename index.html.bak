@@ -35,21 +35,21 @@
  <p>Nissan Skyline GT-R R34 merupakan salah satu mobil ganas milik Nissan yang dijuluki 
  dengan nama “Godzilla”. Mobil ini memiliki tampilan yang ikonik dengan model “coupe”-nya.
  Sayangnya Nissan memberhentikan produksi mobil ini pada tahun 2002/2003 </p>
- <img src="r34.jpg" width="50%"> 
+ <img src="picture/r34.jpg" width="50%"> 
 </div>
 
 <div id="mk4" class="w3-container kota  w3-animate-bottom" style="display:none">
  <h2>Toyota Supra MK4</h2>
  <p>Mobil Supra MK4 bisa disebut sebagai salah satu mobil Toyota paling ikonik yang pernah mereka buat. 
  Tampilannya yang ikonik dan mesinnya yang ganas membuat mobil ini tampil dengan gagah di franchise film Fast and Furious.</p>
- <img src="mk4.jpg" width="50%">
+ <img src="picture/mk4.jpg" width="50%">
 </div>
 
 <div id="rx7" class="w3-container kota w3-animate-top" style="display:none">
  <h2>Mazda RX7</h2>
  <p>Mazda RX-7 adalah mobil sport yang diproduksi oleh Mazda tahun 1978 sampai 2002. RX-7 pada awalnya menggunakan mesin
  wankel rotari berkapasitas silinder 1.146 cc (69,9 cu in) dengan penggerak roda belakang.</p>
- <img src="rx7.jpg" width="50%">
+ <img src="picture/rx7.jpg" width="50%">
 </div>
 
 <div id="nsx" class="w3-container kota w3-animate-zoom" style="display:none">
@@ -57,34 +57,34 @@
  <p>Honda NSX, dipasarkan di Amerika Utara sebagai Acura NSX, adalah mobil sport dua-kursi, mesin tengah dirakit oleh 
  Honda/Acura. Asal-usul jejak NSX kembali ke 1984, dengan konsep HP-X (Honda Pininfarina eXperimental), 
  merupakan mobil sport bermesin 3.0 L V6 mesin tengah berpenggerak roda belakang .</p>
- <img src="nsx.jpg" width="50%">
+ <img src="picture/nsx.jpg" width="50%">
 </div>
 
 <div id="evo9" class="w3-container kota w3-animate-right" style="display:none">
  <h2>Misubitshi Lancer Evo 9 </h2>
  <p>Mitsubithshi Lancer Evo 9 diluncurkan pada 3 Maret 2005 di ajang Geneva Motor Show saat di Jepang. Generasi kesembilannya dibekali
  dengan mesin 2.0 liter dengan kode 4G63 menggunakan teknologi variable valve timing.</p>
- <img src="evo9.jpeg" width="50%">
+ <img src="picture/evo9.jpeg" width="50%">
 </div>
 
 <div id="s15" class="w3-container kota w3-animate-left" style="display:none">
  <h2>Nissan Silvia S15 </h2>
  <p>Nissan Silvia S15 merupakan mobil produksi dari Nissan Motors di Jepang. Mobil sport dua pintu dengan penggerak roda 
  belakang dari Nissan diproduksi tahun 1965 sampai 2002.</p>
- <img src="s15.jpg" width="50%">
+ <img src="picture/s15.jpg" width="50%">
 </div>
 
 <div id="86" class="w3-container kota w3-animate-left" style="display:none">
  <h2>Toyota 86 </h2>
  <p>Toyota 86 adalah mobil sport Coupe berukuran kompak hasil kolaborasi antara Toyota dan Subaru. Mobil ini disebut Toyota GT-86 di Eropa,
  atau Scion FR-S di Amerika Serikat, serta dijual oleh Subaru sebagai Subaru BRZ.</p>
- <img src="86.jpg" width="50%">
+ <img src="picture/86.jpg" width="50%">
 </div>
 
 <div id="me" class="w3-container kota w3-animate-opacity" style="display:none">
  <h2>10122039 </h2>
  <p>MOCHAMAD ZAKY AFRILLIANSYAH</p>
- <img src="me.jpeg" width="35%">
+ <img src="picture/me.jpeg" width="35%">
 </div>
 
 <script>
